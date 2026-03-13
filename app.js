@@ -8,6 +8,7 @@
 // ── Config ────────────────────────────────────────────────────
 
 const DROPBOX_PATH = '/Apps/Claude/Messdaten/Messdaten sEpp-Claude.xlsx';
+const APP_KEY      = 's2ggv6zysmzn7fa';
 
 const TABLE_MAP = {
   'Strom':           'Tabelle3',
@@ -96,10 +97,8 @@ function canonicalUrl() {
 }
 
 async function startAuth() {
-  const appKey = document.getElementById('app-key')?.value.trim();
-  if (!appKey) { alert('Bitte App Key eingeben.'); return; }
-
-  const redirectUri          = canonicalUrl();
+  const appKey      = APP_KEY;
+  const redirectUri = canonicalUrl();
   const { verifier, challenge } = await pkce();
 
   sessionStorage.setItem('pkce_verifier',    verifier);
@@ -121,7 +120,7 @@ async function handleCallback() {
   const code = new URLSearchParams(location.search).get('code');
   if (!code) return;
 
-  const appKey      = sessionStorage.getItem('dropbox_app_key') || localStorage.getItem('dropbox_app_key');
+  const appKey      = APP_KEY;
   const verifier    = sessionStorage.getItem('pkce_verifier');
   const redirectUri = sessionStorage.getItem('redirect_uri')    || canonicalUrl();
 
@@ -145,7 +144,6 @@ async function handleCallback() {
     });
     if (!r.ok) throw new Error(await r.text());
     const d = await r.json();
-    localStorage.setItem('dropbox_app_key',      appKey);
     localStorage.setItem('dropbox_access_token', d.access_token);
     localStorage.setItem('dropbox_refresh_token', d.refresh_token);
     localStorage.setItem('dropbox_expires',       Date.now() + d.expires_in * 1000);
@@ -160,7 +158,7 @@ function isConnected() {
 }
 
 function disconnect() {
-  ['dropbox_app_key', 'dropbox_access_token', 'dropbox_refresh_token', 'dropbox_expires']
+  ['dropbox_access_token', 'dropbox_refresh_token', 'dropbox_expires']
     .forEach(k => localStorage.removeItem(k));
   init();
 }
@@ -175,7 +173,7 @@ async function getToken() {
     body: new URLSearchParams({
       grant_type:    'refresh_token',
       refresh_token: localStorage.getItem('dropbox_refresh_token'),
-      client_id:     localStorage.getItem('dropbox_app_key'),
+      client_id:     APP_KEY,
     }),
   });
   if (!r.ok) throw new Error('Token abgelaufen – bitte neu verbinden.');
@@ -417,32 +415,16 @@ let katCategories = [];
 // ── Setup screen ─────────────────────────────────────────────
 
 function renderSetup() {
-  const redirectUri = canonicalUrl();
   document.getElementById('root').innerHTML = `
     <div class="setup">
       <div class="setup-icon">📊</div>
       <h1>Messdaten</h1>
-      <p>Verbinde die App einmalig mit<br>deinem Dropbox-Account.</p>
-
-      <div class="setup-steps">
-        <strong>1.</strong> Geh zu
-        <a href="https://www.dropbox.com/developers/apps" target="_blank" style="color:var(--blue)">dropbox.com/developers/apps</a><br>
-        <strong>2.</strong> Wähle deine App → <em>Settings</em><br>
-        <strong>3.</strong> Füge folgende Redirect-URI hinzu:<br>
-        <div class="redirect-box">${redirectUri}</div>
-        <strong>4.</strong> Kopiere deinen <em>App key</em> und trage ihn unten ein.
-      </div>
-
-      <div class="setup-card">
-        <label for="app-key">Dropbox App Key</label>
-        <input id="app-key" type="text" placeholder="xxxxxxxxxxxxxxx"
-               autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false">
-        <button class="btn-primary" onclick="startAuth()">Mit Dropbox verbinden →</button>
-      </div>
+      <p>Einmalig mit Dropbox verbinden,<br>danach öffnet die App direkt.</p>
+      <button class="btn-primary" style="width:100%;max-width:320px" onclick="startAuth()">
+        Mit Dropbox verbinden →
+      </button>
     </div>
   `;
-  const stored = localStorage.getItem('dropbox_app_key');
-  if (stored) document.getElementById('app-key').value = stored;
 }
 
 // ── App shell ────────────────────────────────────────────────
