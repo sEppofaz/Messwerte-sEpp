@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#007aff">
+  <title>Messdaten</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.png">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:    #007aff;
+      --bg:      #f2f2f7;
+      --card:    #ffffff;
+      --label:   #636366;
+      --text:    #1c1c1e;
+      --border:  #c6c6c8;
+      --green:   #34c759;
+      --red:     #ff3b30;
+      --chip:    #e5e5ea;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      /* iOS safe areas */
+      padding-top:    env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      overflow: hidden;
+    }
+
+    #root { height: 100vh; height: 100dvh; }
+
+    /* ── App shell ── */
+    #app { display: flex; flex-direction: column; height: 100%; }
+
+    /* ── Tab bar ── */
+    .tab-bar {
+      display: flex;
+      gap: 3px;
+      padding: 8px 8px 0;
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 5px 1px;
+      border: none;
+      border-radius: 8px;
+      background: var(--chip);
+      color: var(--label);
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tab-btn.active { background: var(--blue); color: #fff; font-weight: 600; }
+
+    /* ── Scroll area ── */
+    .scroll {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 10px 12px 32px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    /* ── Form fields ── */
+    .field-group { margin-bottom: 2px; }
+    .field-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--label);
+      margin-bottom: 4px;
+    }
+    .req { color: var(--red); }
+    .field-group input {
+      display: block;
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 17px;
+      font-family: inherit;
+      background: var(--card);
+      color: var(--text);
+      margin-bottom: 10px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .field-group input:focus { outline: none; border-color: var(--blue); }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .btn-primary:active { opacity: 0.8; }
+
+    /* ── Status ── */
+    .status { font-size: 14px; min-height: 24px; margin-top: 8px; text-align: center; }
+    .status.ok  { color: var(--green); }
+    .status.err { color: var(--red); }
+
+    /* ── Recent entries ── */
+    .recent-section {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .recent-header {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--label);
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+    .recent-table {
+      font-family: 'Menlo', 'SF Mono', 'Courier New', monospace;
+      font-size: 11px;
+      color: var(--text);
+      overflow-x: auto;
+      white-space: pre;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── Autocomplete chips ── */
+    .suggestion-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      margin-top: -4px;
+      margin-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .suggestion-bar::-webkit-scrollbar { display: none; }
+    .suggestion-chip {
+      flex-shrink: 0;
+      padding: 5px 14px;
+      background: var(--chip);
+      border: none;
+      border-radius: 16px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .suggestion-chip:active { background: var(--blue); color: #fff; }
+
+    /* ── Footer ── */
+    .footer-links { text-align: center; padding: 4px 0 12px; }
+    .link-btn {
+      background: none;
+      border: none;
+      color: var(--red);
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 8px 16px;
+    }
+
+    /* ── Setup screen ── */
+    .setup {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 24px 40px;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .setup-icon { font-size: 72px; margin-bottom: 16px; }
+    .setup h1   { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .setup > p  { color: var(--label); margin-bottom: 24px; text-align: center; line-height: 1.5; }
+
+    .setup-card {
+      width: 100%;
+      background: var(--card);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .setup-card label {
+      display: block;
+      font-size: 13px;
+      color: var(--label);
+      margin-bottom: 6px;
+    }
+    .setup-card input {
+      display: block;
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 17px;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: 16px;
+      -webkit-appearance: none;
+    }
+    .setup-hint {
+      font-size: 13px;
+      color: var(--label);
+      text-align: center;
+      line-height: 1.7;
+      width: 100%;
+    }
+    .setup-hint a { color: var(--blue); }
+    .redirect-box {
+      font-family: 'Menlo', monospace;
+      font-size: 12px;
+      background: var(--chip);
+      border-radius: 8px;
+      padding: 8px 12px;
+      word-break: break-all;
+      margin: 6px 0 10px;
+      color: var(--text);
+    }
+    .setup-steps {
+      width: 100%;
+      background: var(--card);
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.8;
+    }
+    .setup-steps strong { color: var(--blue); }
+  </style>
+</head>
+<body>
+  <div id="root"><div style="padding:40px;text-align:center;color:#636366">Lädt…</div></div>
+
+  <!-- SheetJS for .xlsx read/write -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
