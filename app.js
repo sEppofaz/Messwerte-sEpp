@@ -271,8 +271,9 @@ function _expandRef(ws, r, c) {
 function fmtDate(v) {
   if (v == null) return '–';
   if (typeof v === 'number') {
-    // Excel serial → UTC date
-    const d = new Date(Math.round((v - 25569) * 86400) * 1000);
+    // Excel serial → UTC date (1904- oder 1900-System)
+    const offset = workbookIs1904 ? 24107 : 25569;
+    const d = new Date(Math.round((v - offset) * 86400) * 1000);
     return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC' });
   }
   return String(v);
@@ -344,12 +345,15 @@ function recentRows(ws, key, count = 10) {
 
 // ── Write row ────────────────────────────────────────────────
 
-function writeRow(ws, key, p, n, date, fields) {
+function writeRow(ws, key, p, n, dateSerial, fields) {
   const sc = (col, v) => xlSet(ws, n, col, v);
   const sf = (col, f) => xlFormula(ws, n, col, f);
   const z  = fields.zaehler;
 
-  sc(1, date);
+  // Datum mit korrektem Format direkt schreiben
+  const dateAddr = XLSX.utils.encode_cell({ r: n - 1, c: 0 });
+  ws[dateAddr] = { t: 'n', v: dateSerial, z: 'DD.MM.YYYY' };
+  _expandRef(ws, n - 1, 0);
 
   if (key === 'strom') {
     sc(2, z);
@@ -422,6 +426,7 @@ function extendTable(ws, sheetName, n) {
 
 let tabIdx        = 0;
 let katCategories = [];
+let workbookIs1904 = false;  // wird beim Laden der Datei gesetzt
 
 // ── Setup screen ─────────────────────────────────────────────
 
@@ -548,6 +553,7 @@ async function loadRecent() {
     const token = await getToken();
     const buf   = await dbDownload(token);
     const wb    = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
     const ws    = wb.Sheets[tab.sheet];
     if (!ws) throw new Error(`Tabellenblatt "${tab.sheet}" nicht gefunden.`);
     const rows  = recentRows(ws, tab.key);
@@ -617,12 +623,17 @@ async function onSubmit() {
     const token = await getToken();
     const buf   = await dbDownload(token);
     const wb    = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
     const ws    = wb.Sheets[tab.sheet];
     if (!ws) throw new Error(`Tabellenblatt "${tab.sheet}" nicht gefunden.`);
     const p = xlLastRow(ws);
     const n = p + 1;
 
-    writeRow(ws, tab.key, p, n, date, fields);
+    // Korrekte Excel-Seriennummer je nach Datumssystem der Arbeitsmappe
+    const epoch      = workbookIs1904 ? new Date(Date.UTC(1904, 0, 1)) : new Date(Date.UTC(1899, 11, 30));
+    const dateSerial = Math.round((date - epoch) / 86400000);
+
+    writeRow(ws, tab.key, p, n, dateSerial, fields);
     extendTable(ws, tab.sheet, n);
 
     const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
