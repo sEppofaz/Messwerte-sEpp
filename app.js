@@ -235,7 +235,9 @@ function xlSet(ws, row, col, val) {  // 1-indexed
   const addr = XLSX.utils.encode_cell({ r: row - 1, c: col - 1 });
   if (val === null || val === undefined) { delete ws[addr]; return; }
   if (val instanceof Date) {
-    ws[addr] = { t: 'n', v: XLSX.utils.datenum(val), z: 'dd.mm.yy' };
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const days = (val - excelEpoch) / 86400000;
+    ws[addr] = { t: 'n', v: days, z: 'dd.mm.yy' };
   } else if (typeof val === 'number') {
     ws[addr] = { t: 'n', v: val };
   } else {
