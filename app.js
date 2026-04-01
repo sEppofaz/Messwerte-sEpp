@@ -163,6 +163,15 @@ function disconnect() {
   init();
 }
 
+function applyUpdate() {
+  if (window._pendingSW) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+    window._pendingSW.postMessage({ type: 'SKIP_WAITING' });
+  } else {
+    location.reload(true);
+  }
+}
+
 async function getToken() {
   const exp = +localStorage.getItem('dropbox_expires');
   if (Date.now() < exp - 60_000) return localStorage.getItem('dropbox_access_token');
@@ -442,6 +451,7 @@ function renderApp() {
           <div class="recent-table" id="recent-table">Lade…</div>
         </div>
         <div class="footer-links">
+          <button class="link-btn" id="update-btn" style="display:none;color:var(--blue)" onclick="applyUpdate()">⬆️ Update verfügbar – neu laden</button>
           <button class="link-btn" onclick="disconnect()">Dropbox trennen</button>
         </div>
       </div>
@@ -637,9 +647,26 @@ async function onSubmit() {
 // ── Init ─────────────────────────────────────────────────────
 
 async function init() {
-  // Register service worker
+  // Register service worker and detect updates
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        newSW.addEventListener('statechange', () => {
+          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            window._pendingSW = newSW;
+            const btn = document.getElementById('update-btn');
+            if (btn) btn.style.display = '';
+          }
+        });
+      });
+      // check for waiting SW on load (e.g. app was already open)
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        window._pendingSW = reg.waiting;
+        const btn = document.getElementById('update-btn');
+        if (btn) btn.style.display = '';
+      }
+    }).catch(() => {});
   }
 
   // Handle OAuth callback
