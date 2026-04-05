@@ -1,5 +1,5 @@
 // Messdaten Service Worker – caches app shell for offline loading
-const CACHE   = 'messdaten-v1';
+const CACHE   = 'messdaten-v3';
 const SHELL   = ['./', './app.js'];
 const CDN_XLSX = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
 
@@ -17,6 +17,10 @@ self.addEventListener('activate', e => {
     )
   );
   self.clients.claim();
+});
+
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', e => {

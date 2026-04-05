@@ -9,6 +9,7 @@
 
 const DROPBOX_PATH = '/Apps/Claude/Messdaten/Messdaten sEpp-Claude.xlsx';
 const APP_KEY      = 's2ggv6zysmzn7fa';
+const APP_VERSION  = 'v3';
 
 const TABLE_MAP = {
   'Strom':           'Tabelle3',
@@ -456,8 +457,9 @@ function renderApp() {
           <div class="recent-table" id="recent-table">Lade…</div>
         </div>
         <div class="footer-links">
-          <button class="link-btn" id="update-btn" style="display:none;color:var(--blue)" onclick="applyUpdate()">⬆️ Update verfügbar – neu laden</button>
+          <button class="link-btn" id="update-btn" style="color:var(--blue)" onclick="applyUpdate()">🔄 Aktualisieren</button>
           <button class="link-btn" onclick="disconnect()">Dropbox trennen</button>
+          <span class="app-version">${APP_VERSION}</span>
         </div>
       </div>
     </div>
@@ -667,7 +669,7 @@ async function init() {
           if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
             window._pendingSW = newSW;
             const btn = document.getElementById('update-btn');
-            if (btn) btn.style.display = '';
+            if (btn) btn.textContent = '⬆️ Neue Version – jetzt laden';
           }
         });
       });
@@ -675,7 +677,7 @@ async function init() {
       if (reg.waiting && navigator.serviceWorker.controller) {
         window._pendingSW = reg.waiting;
         const btn = document.getElementById('update-btn');
-        if (btn) btn.style.display = '';
+        if (btn) btn.textContent = '⬆️ Neue Version – jetzt laden';
       }
     }).catch(() => {});
   }
