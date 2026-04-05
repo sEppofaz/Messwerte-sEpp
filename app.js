@@ -9,7 +9,7 @@
 
 const DROPBOX_PATH = '/Apps/Claude/Messdaten/Messdaten sEpp-Claude.xlsx';
 const APP_KEY      = 's2ggv6zysmzn7fa';
-const APP_VERSION  = 'v3';
+const APP_VERSION  = 'v4';
 
 const TABLE_MAP = {
   'Strom':           'Tabelle3',
@@ -165,12 +165,7 @@ function disconnect() {
 }
 
 function applyUpdate() {
-  if (window._pendingSW) {
-    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
-    window._pendingSW.postMessage({ type: 'SKIP_WAITING' });
-  } else {
-    location.reload(true);
-  }
+  location.reload(true);
 }
 
 async function getToken() {
@@ -434,7 +429,7 @@ let workbookIs1904 = false;  // wird beim Laden der Datei gesetzt
 function renderSetup() {
   document.getElementById('root').innerHTML = `
     <div class="setup">
-      <div class="setup-icon">📊</div>
+      <div class="setup-icon"><img src="icon.svg" alt="Messdaten"></div>
       <h1>Messdaten</h1>
       <p>Einmalig mit Dropbox verbinden,<br>danach öffnet die App direkt.</p>
       <button class="btn-primary" style="width:100%;max-width:320px" onclick="startAuth()">
@@ -449,6 +444,10 @@ function renderSetup() {
 function renderApp() {
   document.getElementById('root').innerHTML = `
     <div id="app">
+      <div class="app-header">
+        <img src="icon.svg" alt="">
+        <span class="app-header-title">Messdaten</span>
+      </div>
       <div class="tab-bar" id="tab-bar"></div>
       <div class="scroll" id="scroll">
         <div class="card" id="form-card"></div>
@@ -660,26 +659,9 @@ async function onSubmit() {
 // ── Init ─────────────────────────────────────────────────────
 
 async function init() {
-  // Register service worker and detect updates
+  // Register service worker – skipWaiting() im SW übernimmt Updates automatisch
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').then(reg => {
-      reg.addEventListener('updatefound', () => {
-        const newSW = reg.installing;
-        newSW.addEventListener('statechange', () => {
-          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-            window._pendingSW = newSW;
-            const btn = document.getElementById('update-btn');
-            if (btn) btn.textContent = '⬆️ Neue Version – jetzt laden';
-          }
-        });
-      });
-      // check for waiting SW on load (e.g. app was already open)
-      if (reg.waiting && navigator.serviceWorker.controller) {
-        window._pendingSW = reg.waiting;
-        const btn = document.getElementById('update-btn');
-        if (btn) btn.textContent = '⬆️ Neue Version – jetzt laden';
-      }
-    }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 
   // Handle OAuth callback

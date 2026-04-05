@@ -1,6 +1,6 @@
 // Messdaten Service Worker – caches app shell for offline loading
-const CACHE   = 'messdaten-v3';
-const SHELL   = ['./', './app.js'];
+const CACHE   = 'messdaten-v4';
+const SHELL   = ['./', './app.js', './icon.svg'];
 const CDN_XLSX = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
 
 self.addEventListener('install', e => {

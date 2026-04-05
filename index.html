@@ -8,6 +8,7 @@
   <meta name="theme-color" content="#007aff">
   <title>Messdaten</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.png">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -198,7 +199,11 @@
       max-width: 480px;
       margin: 0 auto;
     }
-    .setup-icon { font-size: 72px; margin-bottom: 16px; }
+    .setup-icon { margin-bottom: 16px; }
+    .setup-icon img { width: 88px; height: 88px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,122,255,0.35); }
+    .app-header { display: flex; align-items: center; gap: 9px; padding: 14px 16px 6px; background: var(--card); border-bottom: 1px solid var(--border); }
+    .app-header img { width: 30px; height: 30px; border-radius: 7px; }
+    .app-header-title { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
     .setup h1   { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
     .setup > p  { color: var(--label); margin-bottom: 24px; text-align: center; line-height: 1.5; }
 
