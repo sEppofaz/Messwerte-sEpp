@@ -319,18 +319,22 @@ function recentRows(ws, key, count = 10) {
     });
   }
 
+  // Anzeigegenauigkeit: [z, delta, perDay]
+  const dd = { strom: [0,0,1], pv: [0,0,1], wasser: [0,1,2], heizung: [0,0,1] }[key] ?? [2,2,2];
+
   const rows = [], rowNums = [];
   for (let i = 1; i < raw.length; i++) {
-    const { dv, z, zc, pv1, r }               = raw[i];
-    const { dv: dvp, z: zp, pv1: pv1p }       = raw[i - 1];
+    const { dv, z, zc, pv1, r }                  = raw[i];
+    const { dv: dvp, z: zp, zc: zcp, pv1: pv1p } = raw[i - 1];
     let delta = null, perDay = null, ratio = null;
     try {
-      delta = Math.round((z - zp) * 1000) / 1000;
+      // Strom: Delta aus Zähler ges. (Sp. C) berechnen – hat lückenlos Werte
+      const dz = (key === 'strom') ? (zc - zcp) : (z - zp);
+      delta = Math.round(dz * 1000) / 1000;
       if (typeof dv === 'number' && typeof dvp === 'number') {
         const days = dv - dvp;
         if (days > 0) {
-          const dp = { strom: 1, pv: 1, wasser: 4, heizung: 2 }[key] ?? 2;
-          perDay = Math.round(delta / days * 10 ** dp) / 10 ** dp;
+          perDay = Math.round(dz / days * 10 ** dd[2]) / 10 ** dd[2];
         }
       }
     } catch {}
@@ -343,8 +347,8 @@ function recentRows(ws, key, count = 10) {
         }
       } catch {}
     }
-    const row = [fmtDate(dv), z, safeRound(delta), safeRound(perDay)];
-    if (key === 'strom') row.splice(2, 0, zc ?? '–');   // Zähler ges. nach Zähler neu
+    const row = [fmtDate(dv), safeRound(z, dd[0]), safeRound(delta, dd[1]), safeRound(perDay, dd[2])];
+    if (key === 'strom') row.splice(2, 0, safeRound(zc, 0));
     if (key === 'pv') row.push(ratio ?? '–');
     rows.push(row);
     rowNums.push(r);
