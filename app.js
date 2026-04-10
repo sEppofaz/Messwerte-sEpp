@@ -283,7 +283,8 @@ function fmtDate(v) {
 
 function safeRound(v, d = 2) {
   const n = typeof v === 'number' ? v : parseFloat(v);
-  return isNaN(n) ? (v ?? '–') : Math.round(n * 10 ** d) / 10 ** d;
+  if (isNaN(n)) return v ?? '–';
+  return d === 0 ? String(Math.round(n)) : n.toFixed(d);
 }
 
 // ── Recent rows ──────────────────────────────────────────────
