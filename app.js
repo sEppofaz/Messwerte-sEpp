@@ -26,7 +26,7 @@ const TABS = [
       { key: 'zaehler',   label: 'Zählerstand (kWh)',    type: 'decimal', req: true  },
       { key: 'bemerkung', label: 'Bemerkung',             type: 'text',    req: false },
     ],
-    headers: ['Datum', 'Zähler', 'Δ kWh', 'kWh/Tag'],
+    headers: ['Datum', 'Zähler neu', 'Zähler ges.', 'Δ kWh', 'kWh/Tag'],
   },
   {
     key: 'pv', sheet: 'PV-Werte', label: '☀️ PV',
@@ -313,6 +313,7 @@ function recentRows(ws, key, count = 10) {
     raw.push({
       dv:  xlGet(ws, r, 1),
       z:   key === 'pv' ? xlGet(ws, r, 4) : xlGet(ws, r, 2),
+      zc:  key === 'strom' ? xlGet(ws, r, 3) : null,
       pv1: key === 'pv' ? xlGet(ws, r, 6) : null,
       r,
     });
@@ -320,8 +321,8 @@ function recentRows(ws, key, count = 10) {
 
   const rows = [], rowNums = [];
   for (let i = 1; i < raw.length; i++) {
-    const { dv, z, pv1, r }               = raw[i];
-    const { dv: dvp, z: zp, pv1: pv1p }   = raw[i - 1];
+    const { dv, z, zc, pv1, r }               = raw[i];
+    const { dv: dvp, z: zp, pv1: pv1p }       = raw[i - 1];
     let delta = null, perDay = null, ratio = null;
     try {
       delta = Math.round((z - zp) * 1000) / 1000;
@@ -343,6 +344,7 @@ function recentRows(ws, key, count = 10) {
       } catch {}
     }
     const row = [fmtDate(dv), z, safeRound(delta), safeRound(perDay)];
+    if (key === 'strom') row.splice(2, 0, zc ?? '–');   // Zähler ges. nach Zähler neu
     if (key === 'pv') row.push(ratio ?? '–');
     rows.push(row);
     rowNums.push(r);
@@ -656,7 +658,7 @@ async function loadRecent() {
   try {
     const token = await getToken();
     const buf   = await dbDownload(token);
-    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true });
     workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
     const ws    = wb.Sheets[tab.sheet];
     if (!ws) throw new Error(`Tabellenblatt "${tab.sheet}" nicht gefunden.`);
@@ -693,7 +695,7 @@ async function startEdit(rowNum) {
   try {
     const token = await getToken();
     const buf   = await dbDownload(token);
-    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true });
     workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
     const ws    = wb.Sheets[tab.sheet];
     if (!ws) throw new Error('Blatt nicht gefunden');
@@ -772,7 +774,7 @@ async function onSubmit() {
   try {
     const token = await getToken();
     const buf   = await dbDownload(token);
-    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true });
     workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
     const ws    = wb.Sheets[tab.sheet];
     if (!ws) throw new Error(`Tabellenblatt "${tab.sheet}" nicht gefunden.`);
@@ -794,7 +796,7 @@ async function onSubmit() {
       savedRow = n;
     }
 
-    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellStyles: true });
     await dbUpload(token, new Uint8Array(out));
 
     const successMsg = isEdit
