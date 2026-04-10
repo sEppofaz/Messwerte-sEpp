@@ -9,7 +9,7 @@
 
 const DROPBOX_PATH = '/Apps/Claude/Messdaten/Messdaten sEpp-Claude.xlsx';
 const APP_KEY      = 's2ggv6zysmzn7fa';
-const APP_VERSION  = 'v4';
+const APP_VERSION  = 'v5';
 
 const TABLE_MAP = {
   'Strom':           'Tabelle3',
@@ -65,7 +65,7 @@ const TABS = [
       { key: 'zaehler',   label: 'Betriebsstd.',            type: 'decimal', req: false },
       { key: 'kosten',    label: 'Kosten [€]',              type: 'decimal', req: false },
     ],
-    headers: ['Datum', 'Kategorie', 'Thema', 'Kosten'],
+    headers: ['Datum', 'Kategorie', 'Thema', 'Kosten [€]'],
   },
 ];
 
@@ -88,7 +88,6 @@ async function pkce() {
 }
 
 function canonicalUrl() {
-  // Derive the redirect URI: strip query, hash and trailing index.html
   const u = new URL(location.href);
   u.search = '';
   u.hash   = '';
@@ -164,7 +163,15 @@ function disconnect() {
   init();
 }
 
-function applyUpdate() {
+async function applyUpdate() {
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  }
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+  }
   location.reload(true);
 }
 
@@ -267,7 +274,6 @@ function _expandRef(ws, r, c) {
 function fmtDate(v) {
   if (v == null) return '–';
   if (typeof v === 'number') {
-    // Excel serial → UTC date (1904- oder 1900-System)
     const offset = workbookIs1904 ? 24107 : 25569;
     const d = new Date(Math.round((v - offset) * 86400) * 1000);
     return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC' });
@@ -286,16 +292,19 @@ function recentRows(ws, key, count = 10) {
   const last = xlLastRow(ws);
 
   if (key === 'maschinen') {
-    const rows = [];
-    for (let r = Math.max(2, last - count + 1); r <= last; r++) {
+    const startRow = Math.max(2, last - count + 1);
+    const rows = [], rowNums = [];
+    for (let r = startRow; r <= last; r++) {
       rows.push([
         fmtDate(xlGet(ws, r, 1)),
         xlGet(ws, r, 2) ?? '–',
         xlGet(ws, r, 3) ?? '–',
         safeRound(xlGet(ws, r, 5)),
       ]);
+      rowNums.push(r);
     }
-    return rows.slice(-count);
+    const hasMore = startRow > 2;
+    return { rows: rows.slice(-count), rowNums: rowNums.slice(-count), hasMore };
   }
 
   const start = Math.max(3, last - count);
@@ -305,13 +314,14 @@ function recentRows(ws, key, count = 10) {
       dv:  xlGet(ws, r, 1),
       z:   key === 'pv' ? xlGet(ws, r, 4) : xlGet(ws, r, 2),
       pv1: key === 'pv' ? xlGet(ws, r, 6) : null,
+      r,
     });
   }
 
-  const rows = [];
+  const rows = [], rowNums = [];
   for (let i = 1; i < raw.length; i++) {
-    const { dv, z, pv1 }             = raw[i];
-    const { dv: dvp, z: zp, pv1: pv1p } = raw[i - 1];
+    const { dv, z, pv1, r }               = raw[i];
+    const { dv: dvp, z: zp, pv1: pv1p }   = raw[i - 1];
     let delta = null, perDay = null, ratio = null;
     try {
       delta = Math.round((z - zp) * 1000) / 1000;
@@ -335,8 +345,50 @@ function recentRows(ws, key, count = 10) {
     const row = [fmtDate(dv), z, safeRound(delta), safeRound(perDay)];
     if (key === 'pv') row.push(ratio ?? '–');
     rows.push(row);
+    rowNums.push(r);
   }
-  return rows.slice(-count);
+  const hasMore = start > 3;
+  return { rows: rows.slice(-count), rowNums: rowNums.slice(-count), hasMore };
+}
+
+// ── Read row fields for editing ──────────────────────────────
+
+function readRowFields(ws, key, rowNum) {
+  const r = rowNum;
+  const datumSerial = xlGet(ws, r, 1);
+  let dateStr = '';
+  if (typeof datumSerial === 'number') {
+    const offset = workbookIs1904 ? 24107 : 25569;
+    const ms = Math.round((datumSerial - offset) * 86400) * 1000;
+    dateStr = new Date(ms).toISOString().slice(0, 10);
+  }
+
+  const fields = {};
+  if (key === 'strom') {
+    fields.zaehler   = xlGet(ws, r, 2);
+    fields.bemerkung = xlGet(ws, r, 8);
+  } else if (key === 'pv') {
+    fields.zaehler   = xlGet(ws, r, 4);
+    fields.pv1       = xlGet(ws, r, 6);
+    fields.bemerkung = xlGet(ws, r, 17);
+  } else if (key === 'wasser') {
+    fields.zaehler   = xlGet(ws, r, 2);
+    fields.ph        = xlGet(ws, r, 7);
+    fields.haerte    = xlGet(ws, r, 8);
+    fields.druck     = xlGet(ws, r, 9);
+    fields.bemerkung = xlGet(ws, r, 10);
+  } else if (key === 'heizung') {
+    fields.zaehler   = xlGet(ws, r, 2);
+    fields.druck     = xlGet(ws, r, 3);
+    fields.bemerkung = xlGet(ws, r, 9);
+  } else if (key === 'maschinen') {
+    fields.kategorie = xlGet(ws, r, 2);
+    fields.thema     = xlGet(ws, r, 3);
+    fields.zaehler   = xlGet(ws, r, 4);
+    fields.kosten    = xlGet(ws, r, 5);
+  }
+
+  return { dateStr, fields };
 }
 
 // ── Write row ────────────────────────────────────────────────
@@ -346,7 +398,6 @@ function writeRow(ws, key, p, n, dateSerial, fields) {
   const sf = (col, f) => xlFormula(ws, n, col, f);
   const z  = fields.zaehler;
 
-  // Datum mit korrektem Format direkt schreiben
   const dateAddr = XLSX.utils.encode_cell({ r: n - 1, c: 0 });
   ws[dateAddr] = { t: 'n', v: dateSerial, z: 'DD.MM.YYYY' };
   _expandRef(ws, n - 1, 0);
@@ -420,9 +471,11 @@ function extendTable(ws, sheetName, n) {
 
 // ── App state ────────────────────────────────────────────────
 
-let tabIdx        = 0;
-let katCategories = [];
-let workbookIs1904 = false;  // wird beim Laden der Datei gesetzt
+let tabIdx         = 0;
+let katCategories  = [];
+let workbookIs1904 = false;
+let editRowNum     = null;   // null = neuer Eintrag, Zahl = Bearbeitungsmodus
+let recentCount    = 10;     // Anzahl angezeigter Einträge
 
 // ── Setup screen ─────────────────────────────────────────────
 
@@ -452,7 +505,7 @@ function renderApp() {
       <div class="scroll" id="scroll">
         <div class="card" id="form-card"></div>
         <div class="recent-section" id="recent-section">
-          <div class="recent-header">LETZTE EINTRÄGE</div>
+          <div class="recent-header">LETZTE EINTRÄGE <span class="recent-hint">Eintrag antippen zum Bearbeiten</span></div>
           <div class="recent-table" id="recent-table">Lade…</div>
         </div>
         <div class="footer-links">
@@ -475,6 +528,8 @@ function renderTabBar() {
 
 function switchTab(i) {
   tabIdx = i;
+  editRowNum = null;
+  recentCount = 10;
   renderTabBar();
   renderForm();
   loadRecent();
@@ -483,12 +538,14 @@ function switchTab(i) {
 // ── Form ─────────────────────────────────────────────────────
 
 function renderForm() {
-  const tab   = TABS[tabIdx];
-  const today = new Date().toISOString().slice(0, 10);
+  const tab    = TABS[tabIdx];
+  const today  = new Date().toISOString().slice(0, 10);
+  const isEdit = editRowNum !== null;
+
   let html = `
     <div class="field-group">
       <label>Datum</label>
-      <input type="date" id="f-datum" value="${today}" max="${today}">
+      <input type="date" id="f-datum" value="${today}"${isEdit ? '' : ` max="${today}"`}>
     </div>
   `;
   for (const f of tab.fields) {
@@ -514,8 +571,13 @@ function renderForm() {
       `;
     }
   }
+
+  if (isEdit) {
+    html += `<div class="edit-banner">✏️ Zeile ${editRowNum} wird bearbeitet</div>`;
+    html += `<button class="btn-secondary" onclick="cancelEdit()">Abbrechen</button>`;
+  }
   html += `
-    <button class="btn-primary" onclick="onSubmit()">Eintragen</button>
+    <button class="btn-primary" onclick="onSubmit()">${isEdit ? 'Änderung speichern' : 'Eintragen'}</button>
     <div class="status" id="status"></div>
   `;
   document.getElementById('form-card').innerHTML = html;
@@ -544,6 +606,47 @@ function pickKat(cat) {
   if (bar) bar.style.display = 'none';
 }
 
+// ── Render recent table (HTML) ────────────────────────────────
+
+function renderRecentTable(tab, rows, rowNums, hasMore) {
+  const hdrs       = tab.headers;
+  const isMaschinen = tab.key === 'maschinen';
+
+  const colClass = (i) => {
+    if (i === 0) return 'col-date';
+    if (isMaschinen && i === 1) return 'col-kat';
+    if (isMaschinen && i === 2) return 'col-thema';
+    if (isMaschinen && i === 3) return 'col-num col-kosten';
+    return 'col-num';
+  };
+
+  let html = '<table class="rt"><thead><tr>';
+  hdrs.forEach((h, i) => {
+    html += `<th class="${colClass(i)}">${h}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  // Neueste zuerst
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const row    = rows[i];
+    const rNum   = rowNums[i];
+    const active = rNum === editRowNum;
+    html += `<tr class="rt-row${active ? ' rt-editing' : ''}" data-row="${rNum}" onclick="startEdit(${rNum})">`;
+    row.forEach((v, ci) => {
+      html += `<td class="${colClass(ci)}">${v ?? '–'}</td>`;
+    });
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+
+  if (hasMore) {
+    html += `<div class="more-bar"><button class="more-btn" onclick="loadMore()">Mehr anzeigen ↑</button></div>`;
+  }
+
+  return html;
+}
+
 // ── Load recent ──────────────────────────────────────────────
 
 async function loadRecent() {
@@ -557,9 +660,9 @@ async function loadRecent() {
     workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
     const ws    = wb.Sheets[tab.sheet];
     if (!ws) throw new Error(`Tabellenblatt "${tab.sheet}" nicht gefunden.`);
-    const rows  = recentRows(ws, tab.key);
 
-    // Load categories for Maschinen tab
+    const { rows, rowNums, hasMore } = recentRows(ws, tab.key, recentCount);
+
     if (tab.key === 'maschinen') {
       const last = xlLastRow(ws);
       katCategories = [...new Set(
@@ -568,24 +671,73 @@ async function loadRecent() {
       )].sort();
     }
 
-    const hdrs  = tab.headers;
-    const colW  = hdrs.length > 4 ? 9 : 11;
-    const pad   = (s, w) => String(s ?? '–').slice(0, w).padEnd(w);
-    const lines = [hdrs.map(h => pad(h, colW)).join(' ')];
-    for (const row of [...rows].reverse()) {
-      lines.push(row.map(v => pad(v, colW)).join(' '));
-    }
-    if (tbl) tbl.textContent = lines.join('\n');
+    if (tbl) tbl.innerHTML = renderRecentTable(tab, rows, rowNums, hasMore);
 
   } catch (e) {
     if (tbl) { tbl.textContent = '❌ ' + e.message; }
   }
 }
 
+function loadMore() {
+  recentCount += 10;
+  loadRecent();
+}
+
+// ── Edit existing row ─────────────────────────────────────────
+
+async function startEdit(rowNum) {
+  const tab    = TABS[tabIdx];
+  const status = document.getElementById('status');
+  if (status) { status.textContent = '⏳ Lade…'; status.className = 'status'; }
+
+  try {
+    const token = await getToken();
+    const buf   = await dbDownload(token);
+    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array' });
+    workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
+    const ws    = wb.Sheets[tab.sheet];
+    if (!ws) throw new Error('Blatt nicht gefunden');
+
+    const { dateStr, fields } = readRowFields(ws, tab.key, rowNum);
+
+    editRowNum = rowNum;
+    renderForm();
+
+    const datumEl = document.getElementById('f-datum');
+    if (datumEl && dateStr) datumEl.value = dateStr;
+
+    for (const f of tab.fields) {
+      const el = document.getElementById('f-' + f.key);
+      if (el && fields[f.key] != null) {
+        el.value = String(fields[f.key]);
+      }
+    }
+
+    updateEditHighlight();
+    document.getElementById('form-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch (e) {
+    if (status) { status.textContent = '❌ ' + e.message; status.className = 'status err'; }
+  }
+}
+
+function cancelEdit() {
+  editRowNum = null;
+  renderForm();
+  updateEditHighlight();
+}
+
+function updateEditHighlight() {
+  document.querySelectorAll('.rt-row').forEach(tr => {
+    tr.classList.toggle('rt-editing', +tr.dataset.row === editRowNum);
+  });
+}
+
 // ── Submit ───────────────────────────────────────────────────
 
 async function onSubmit() {
   const tab    = TABS[tabIdx];
+  const isEdit = editRowNum !== null;
   const status = document.getElementById('status');
   const setStatus = (msg, ok = true) => {
     if (!status) return;
@@ -593,7 +745,6 @@ async function onSubmit() {
     status.className   = 'status ' + (ok ? 'ok' : 'err');
   };
 
-  // Validate required fields
   for (const f of tab.fields) {
     if (f.req && !document.getElementById('f-' + f.key)?.value.trim()) {
       setStatus('⚠️ ' + f.label + ' erforderlich', false);
@@ -601,9 +752,7 @@ async function onSubmit() {
     }
   }
 
-  // Collect field values
   const dateStr = document.getElementById('f-datum').value;
-  // Use local noon to avoid timezone-shift on date serial conversion
   const [yr, mo, dy] = dateStr.split('-').map(Number);
   const date = new Date(yr, mo - 1, dy, 12, 0, 0);
 
@@ -627,28 +776,46 @@ async function onSubmit() {
     workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
     const ws    = wb.Sheets[tab.sheet];
     if (!ws) throw new Error(`Tabellenblatt "${tab.sheet}" nicht gefunden.`);
-    const p = xlLastRow(ws);
-    const n = p + 1;
 
-    // Korrekte Excel-Seriennummer je nach Datumssystem der Arbeitsmappe
     const epoch      = workbookIs1904 ? new Date(Date.UTC(1904, 0, 1)) : new Date(Date.UTC(1899, 11, 30));
     const dateSerial = Math.round((date - epoch) / 86400000);
 
-    writeRow(ws, tab.key, p, n, dateSerial, fields);
-    extendTable(ws, tab.sheet, n);
+    let savedRow;
+    if (isEdit) {
+      const n = editRowNum;
+      const p = n - 1;
+      writeRow(ws, tab.key, p, n, dateSerial, fields);
+      savedRow = n;
+    } else {
+      const p = xlLastRow(ws);
+      const n = p + 1;
+      writeRow(ws, tab.key, p, n, dateSerial, fields);
+      extendTable(ws, tab.sheet, n);
+      savedRow = n;
+    }
 
     const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
     await dbUpload(token, new Uint8Array(out));
 
-    // Clear form
-    for (const f of tab.fields) {
-      const el = document.getElementById('f-' + f.key);
-      if (el) el.value = '';
-    }
-    const bar = document.getElementById('kat-bar');
-    if (bar) bar.style.display = 'none';
+    const successMsg = isEdit
+      ? '✅ Zeile ' + savedRow + ' aktualisiert → Dropbox'
+      : '✅ Zeile ' + savedRow + ' gespeichert → Dropbox';
 
-    setStatus('✅ Zeile ' + n + ' gespeichert → Dropbox');
+    if (isEdit) {
+      editRowNum = null;
+      renderForm();
+      const s = document.getElementById('status');
+      if (s) { s.textContent = successMsg; s.className = 'status ok'; }
+    } else {
+      for (const f of tab.fields) {
+        const el = document.getElementById('f-' + f.key);
+        if (el) el.value = '';
+      }
+      const bar = document.getElementById('kat-bar');
+      if (bar) bar.style.display = 'none';
+      setStatus(successMsg);
+    }
+
     loadRecent();
 
   } catch (e) {
@@ -659,12 +826,10 @@ async function onSubmit() {
 // ── Init ─────────────────────────────────────────────────────
 
 async function init() {
-  // Register service worker – skipWaiting() im SW übernimmt Updates automatisch
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 
-  // Handle OAuth callback
   if (location.search.includes('code=')) {
     await handleCallback();
   }

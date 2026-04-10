@@ -144,14 +144,100 @@
       letter-spacing: 0.5px;
       margin-bottom: 10px;
     }
+    .recent-hint {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--border);
+      letter-spacing: 0;
+    }
     .recent-table {
-      font-family: 'Menlo', 'SF Mono', 'Courier New', monospace;
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text);
       overflow-x: auto;
-      white-space: pre;
       -webkit-overflow-scrolling: touch;
     }
+
+    /* ── Recent HTML table ── */
+    .rt { width: 100%; border-collapse: collapse; }
+    .rt th {
+      text-align: left;
+      padding: 0 8px 6px 0;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--label);
+      white-space: nowrap;
+    }
+    .rt td {
+      padding: 8px 8px 8px 0;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      vertical-align: middle;
+    }
+    .rt .col-date {
+      font-family: 'Menlo', monospace;
+      font-size: 11px;
+      white-space: nowrap;
+      color: var(--label);
+    }
+    .rt .col-num {
+      text-align: right;
+      font-family: 'Menlo', monospace;
+      white-space: nowrap;
+    }
+    .rt .col-kat {
+      white-space: nowrap;
+      max-width: 90px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .rt .col-thema {
+      /* flexible – nimmt verfügbaren Platz */
+      word-break: break-word;
+    }
+    .rt .col-kosten {
+      padding-left: 12px;
+    }
+    .rt-row { cursor: pointer; }
+    .rt-row:active td { background: var(--chip); }
+    .rt-editing td { background: #e8f0fe; }
+
+    /* ── More button ── */
+    .more-bar { text-align: center; padding-top: 8px; }
+    .more-btn {
+      background: none;
+      border: none;
+      color: var(--blue);
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 6px 12px;
+    }
+
+    /* ── Edit mode ── */
+    .edit-banner {
+      font-size: 13px;
+      color: var(--blue);
+      background: #e8f0fe;
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      margin-top: 4px;
+    }
+    .btn-secondary {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: var(--chip);
+      color: var(--text);
+      border: none;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+    .btn-secondary:active { opacity: 0.7; }
 
     /* ── Autocomplete chips ── */
     .suggestion-bar {
