@@ -248,6 +248,7 @@ async function loadData() {
   const json  = await jsonDownload(token);
   _data = json || emptyData();
   if (!_data.wallbox) _data.wallbox = [];
+  if (_data.strom?.length) recalcStromGes(_data.strom, 0);
   return _data;
 }
 
@@ -698,12 +699,15 @@ async function onSubmit() {
     }
 
     if (isEdit) {
+      const oldPos = editIdx;
       arr[editIdx] = entry;
+      arr.sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0));
+      if (tab.key === 'strom') recalcStromGes(arr, Math.min(oldPos, arr.indexOf(entry)));
     } else {
       arr.push(entry);
+      arr.sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0));
+      if (tab.key === 'strom') recalcStromGes(arr, arr.indexOf(entry));
     }
-    arr.sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0));
-    if (tab.key === 'strom') recalcStromGes(arr, 0);
 
     await saveData();
 
