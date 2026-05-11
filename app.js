@@ -1,7 +1,6 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────
-const DROPBOX_XLS_PATH  = '/Apps/Claude/Messdaten/Messdaten sEpp-Claude.xlsx';
 const DROPBOX_JSON_PATH = '/Apps/Claude/Messdaten/messdaten.json';
 const APP_KEY           = 's2ggv6zysmzn7fa';
 const APP_VERSION       = 'v6';
@@ -190,20 +189,6 @@ function safeRound(v, d = 2) {
   return d === 0 ? String(Math.round(n)) : n.toFixed(d);
 }
 
-function serialToIso(serial, is1904) {
-  if (serial == null) return null;
-  if (typeof serial === 'string') {
-    const m = serial.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-    if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(serial)) return serial;
-    return null;
-  }
-  if (typeof serial !== 'number') return null;
-  const offset = is1904 ? 24107 : 25569;
-  const ms = Math.round((serial - offset) * 86400) * 1000;
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
 // ── Dropbox JSON I/O ─────────────────────────────────────────
 
 async function jsonDownload(token) {
@@ -236,34 +221,6 @@ async function jsonUpload(token, data) {
   if (!r.ok) throw new Error('Upload fehlgeschlagen: ' + r.status);
 }
 
-// ── Excel download + helpers (migration only) ─────────────────
-
-async function xlsDownload(token) {
-  const r = await fetch(CONTENT + '/files/download', {
-    method: 'POST',
-    headers: {
-      Authorization:     'Bearer ' + token,
-      'Dropbox-API-Arg': JSON.stringify({ path: DROPBOX_XLS_PATH }),
-    },
-  });
-  if (!r.ok) throw new Error('Excel-Download fehlgeschlagen: ' + r.status);
-  return r.arrayBuffer();
-}
-
-function xlGet(ws, row, col) {
-  const cell = ws[XLSX.utils.encode_cell({ r: row - 1, c: col - 1 })];
-  return cell ? cell.v : undefined;
-}
-
-function xlLastRow(ws) {
-  if (!ws['!ref']) return 1;
-  const rng = XLSX.utils.decode_range(ws['!ref']);
-  for (let r = rng.e.r; r >= 1; r--) {
-    const c = ws[XLSX.utils.encode_cell({ r, c: 0 })];
-    if (c && c.v !== undefined) return r + 1;
-  }
-  return 1;
-}
 
 // ── App state ────────────────────────────────────────────────
 
@@ -382,122 +339,6 @@ function recentRowsJson(entries, key, count) {
   return { rows: rows.slice(-count), idxs: idxs.slice(-count), hasMore: start > 0 };
 }
 
-// ── Migration from Excel ──────────────────────────────────────
-
-async function migrateFromExcel() {
-  const btn = document.getElementById('migrate-btn');
-  if (btn) btn.textContent = '⏳ Migriere…';
-  try {
-    const token = await getToken();
-    const buf   = await xlsDownload(token);
-    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true });
-    const is1904 = wb.Workbook?.WBProps?.date1904 ?? false;
-
-    const result = emptyData();
-
-    // Strom (data from row 3, col: 1=datum, 2=zaehler_neu, 3=zaehler_ges, 8=bemerkung)
-    const wsStrom = wb.Sheets['Strom'];
-    if (wsStrom) {
-      const last = xlLastRow(wsStrom);
-      for (let r = 3; r <= last; r++) {
-        const datum = serialToIso(xlGet(wsStrom, r, 1), is1904);
-        if (!datum) continue;
-        result.strom.push({
-          datum,
-          zaehler:     xlGet(wsStrom, r, 2) ?? null,
-          zaehler_ges: xlGet(wsStrom, r, 3) ?? null,
-          bemerkung:   xlGet(wsStrom, r, 8) || null,
-        });
-      }
-    }
-
-    // PV-Werte (data from row 3, col: 1=datum, 4=zaehler, 6=pv1, 17=bemerkung)
-    const wsPv = wb.Sheets['PV-Werte'];
-    if (wsPv) {
-      const last = xlLastRow(wsPv);
-      for (let r = 3; r <= last; r++) {
-        const datum = serialToIso(xlGet(wsPv, r, 1), is1904);
-        if (!datum) continue;
-        result.pv.push({
-          datum,
-          zaehler:   xlGet(wsPv, r, 4)  ?? null,
-          pv1:       xlGet(wsPv, r, 6)  ?? null,
-          bemerkung: xlGet(wsPv, r, 17) || null,
-        });
-      }
-    }
-
-    // Wasser (data from row 3, col: 1=datum, 2=zaehler, 7=ph, 8=haerte, 9=druck, 10=bemerkung)
-    const wsWasser = wb.Sheets['Wasser'];
-    if (wsWasser) {
-      const last = xlLastRow(wsWasser);
-      for (let r = 3; r <= last; r++) {
-        const datum = serialToIso(xlGet(wsWasser, r, 1), is1904);
-        if (!datum) continue;
-        result.wasser.push({
-          datum,
-          zaehler:   xlGet(wsWasser, r, 2)  ?? null,
-          ph:        xlGet(wsWasser, r, 7)  ?? null,
-          haerte:    xlGet(wsWasser, r, 8)  ?? null,
-          druck:     xlGet(wsWasser, r, 9)  ?? null,
-          bemerkung: xlGet(wsWasser, r, 10) || null,
-        });
-      }
-    }
-
-    // Heizung Stunden (data from row 3, col: 1=datum, 2=zaehler, 3=druck, 9=bemerkung)
-    const wsHeizung = wb.Sheets['Heizung Stunden'];
-    if (wsHeizung) {
-      const last = xlLastRow(wsHeizung);
-      for (let r = 3; r <= last; r++) {
-        const datum = serialToIso(xlGet(wsHeizung, r, 1), is1904);
-        if (!datum) continue;
-        result.heizung.push({
-          datum,
-          zaehler:   xlGet(wsHeizung, r, 2) ?? null,
-          druck:     xlGet(wsHeizung, r, 3) ?? null,
-          bemerkung: xlGet(wsHeizung, r, 9) || null,
-        });
-      }
-    }
-
-    // Maschinen (data from row 2, col: 1=datum, 2=kategorie, 3=thema, 4=zaehler, 5=kosten)
-    const wsMasch = wb.Sheets['Maschinen'];
-    if (wsMasch) {
-      const last = xlLastRow(wsMasch);
-      for (let r = 2; r <= last; r++) {
-        const datum = serialToIso(xlGet(wsMasch, r, 1), is1904);
-        if (!datum) continue;
-        result.maschinen.push({
-          datum,
-          kategorie: xlGet(wsMasch, r, 2) || null,
-          thema:     xlGet(wsMasch, r, 3) || null,
-          zaehler:   xlGet(wsMasch, r, 4) ?? null,
-          kosten:    xlGet(wsMasch, r, 5) ?? null,
-        });
-      }
-    }
-
-    const counts = Object.entries(result)
-      .filter(([k]) => k !== 'v')
-      .map(([k, v]) => `${k}: ${v.length} Einträge`)
-      .join('\n');
-
-    if (!confirm(`Migration bereit:\n\n${counts}\n\nDaten jetzt speichern?`)) {
-      if (btn) btn.textContent = '📥 Aus Excel migrieren';
-      return;
-    }
-
-    _data = result;
-    await saveData();
-    if (btn) btn.textContent = '✅ Migriert!';
-    loadRecent();
-  } catch (e) {
-    alert('Fehler bei Migration: ' + e.message);
-    if (btn) btn.textContent = '📥 Aus Excel migrieren';
-  }
-}
-
 // ── Setup screen ─────────────────────────────────────────────
 
 function renderSetup() {
@@ -531,7 +372,6 @@ function renderApp() {
         </div>
         <div class="footer-links">
           <button class="link-btn" style="color:var(--blue)" onclick="applyUpdate()">🔄 Aktualisieren</button>
-          <button id="migrate-btn" class="link-btn" style="color:var(--blue)" onclick="migrateFromExcel()">📥 Aus Excel migrieren</button>
           <button class="link-btn" onclick="disconnect()">Dropbox trennen</button>
           <span class="app-version">${APP_VERSION}</span>
         </div>
