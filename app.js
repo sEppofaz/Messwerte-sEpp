@@ -469,7 +469,7 @@ function renderForm() {
   let html = `
     <div class="field-group">
       <label>Datum</label>
-      <input type="date" id="f-datum" value="${today}"${isEdit ? '' : ` max="${today}"`}>
+      <input type="date" id="f-datum" value="${today}">
     </div>`;
 
   for (const f of tab.fields) {
@@ -699,10 +699,11 @@ async function onSubmit() {
 
     if (isEdit) {
       arr[editIdx] = entry;
-      if (tab.key === 'strom') recalcStromGes(arr, editIdx + 1);
     } else {
       arr.push(entry);
     }
+    arr.sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0));
+    if (tab.key === 'strom') recalcStromGes(arr, 0);
 
     await saveData();
 

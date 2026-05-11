@@ -217,12 +217,17 @@
       padding-left: 12px;
     }
     .rt .col-rem {
-      max-width: 140px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
       color: var(--label);
       font-size: 11px;
+      word-break: break-word;
+    }
+    @media (max-width: 600px) and (orientation: portrait) {
+      .rt .col-rem {
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
     }
     .rt-row { cursor: pointer; }
     .rt-row:active td { background: var(--chip); }
