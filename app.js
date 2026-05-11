@@ -22,8 +22,8 @@ const TABS = [
       { key: 'pv1',       label: 'PV1 Zähler (optional)', type: 'decimal', req: false },
       { key: 'bemerkung', label: 'Bemerkung',              type: 'text',   req: false },
     ],
-    headers:     ['Datum', 'Tage', 'Zähler', 'Δ kWh', 'kWh/Tag', 'Ø kWh/Tag', 'PV1/2%', 'Bemerkung'],
-    desktopOnly: [1, 5, 6, 7],
+    headers:     ['Datum', 'Tage', 'Zähler', 'Δ kWh', 'kWh/Tag', 'Ø kWh/Tag', 'PV1/2%', 'PV1/Tag', 'PV2/Tag', 'Bemerkung'],
+    desktopOnly: [1, 5, 6, 7, 8, 9],
   },
   {
     key: 'wasser', label: '💧 Wasser',
@@ -332,10 +332,17 @@ function recentRowsJson(entries, key, count) {
       const dz = cur.zaehler - prv.zaehler;
       delta = Math.round(dz * 1000) / 1000;
       if (days > 0) perDay = Math.round(dz / days * 10) / 10;
-      let ratio = null;
-      if (cur.pv1 != null && prv.pv1 != null && delta > 0) {
-        const pct1 = Math.round((cur.pv1 - prv.pv1) / delta * 100);
-        ratio = pct1 + '/' + (100 - pct1);
+      let ratio = null, pv1perDay = null, pv2perDay = null;
+      if (cur.pv1 != null && prv.pv1 != null) {
+        const dpv1 = cur.pv1 - prv.pv1;
+        if (delta > 0) {
+          const pct1 = Math.round(dpv1 / delta * 100);
+          ratio = pct1 + '/' + (100 - pct1);
+        }
+        if (days > 0) {
+          pv1perDay = Math.round(dpv1 / days * 10) / 10;
+          pv2perDay = Math.round((dz - dpv1) / days * 10) / 10;
+        }
       }
       rows.push([
         fmtDateStr(cur.datum),
@@ -345,6 +352,8 @@ function recentRowsJson(entries, key, count) {
         safeRound(perDay, 1),
         avg != null ? safeRound(avg, 1) : '–',
         ratio ?? '–',
+        pv1perDay != null ? safeRound(pv1perDay, 1) : '–',
+        pv2perDay != null ? safeRound(pv2perDay, 1) : '–',
         cur.bemerkung ?? '–',
       ]);
 
@@ -735,10 +744,16 @@ async function onSubmit() {
 
 // ── Init ─────────────────────────────────────────────────────
 
+function syncLandscape() {
+  document.body.classList.toggle('landscape', window.innerWidth > window.innerHeight);
+}
+
 async function init() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
+  syncLandscape();
+  window.addEventListener('resize', syncLandscape);
   document.addEventListener('input', e => {
     if (e.target.classList.contains('auto-grow')) {
       e.target.style.height = 'auto';
