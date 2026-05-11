@@ -221,21 +221,19 @@
       font-size: 11px;
       word-break: break-word;
     }
-    @media (max-width: 600px) and (orientation: portrait) {
+    .rt-row { cursor: pointer; }
+    .rt-row:active td { background: var(--chip); }
+    .rt-editing td { background: #e8f0fe; }
+
+    /* Extra-Spalten + Bemerkung auf schmalen Screens (Portrait-Phone) ausblenden */
+    @media (max-width: 600px) {
+      .col-extra { display: none; }
       .rt .col-rem {
         max-width: 80px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-    }
-    .rt-row { cursor: pointer; }
-    .rt-row:active td { background: var(--chip); }
-    .rt-editing td { background: #e8f0fe; }
-
-    /* Desktop-only Spalten auf Mobile Portrait ausblenden */
-    @media (max-width: 600px) and (orientation: portrait) {
-      .col-extra { display: none; }
     }
 
     /* ── More button ── */
