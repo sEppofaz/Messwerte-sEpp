@@ -1,35 +1,22 @@
 'use strict';
 
-// ═══════════════════════════════════════════════════════════════
-//  Messdaten PWA – app.js
-//  Requires: SheetJS (xlsx) loaded before this script
-// ═══════════════════════════════════════════════════════════════
-
 // ── Config ────────────────────────────────────────────────────
-
-const DROPBOX_PATH = '/Apps/Claude/Messdaten/Messdaten sEpp-Claude.xlsx';
-const APP_KEY      = 's2ggv6zysmzn7fa';
-const APP_VERSION  = 'v5';
-
-const TABLE_MAP = {
-  'Strom':           'Tabelle3',
-  'PV-Werte':        'Tabelle2',
-  'Wasser':          'Tabelle1',
-  'Heizung Stunden': 'Tabelle5',
-  'Maschinen':       'Tabelle4',
-};
+const DROPBOX_XLS_PATH  = '/Apps/Claude/Messdaten/Messdaten sEpp-Claude.xlsx';
+const DROPBOX_JSON_PATH = '/Apps/Claude/Messdaten/messdaten.json';
+const APP_KEY           = 's2ggv6zysmzn7fa';
+const APP_VERSION       = 'v6';
 
 const TABS = [
   {
-    key: 'strom', sheet: 'Strom', label: '⚡ Strom',
+    key: 'strom', label: '⚡ Strom',
     fields: [
-      { key: 'zaehler',   label: 'Zählerstand (kWh)',    type: 'decimal', req: true  },
-      { key: 'bemerkung', label: 'Bemerkung',             type: 'text',    req: false },
+      { key: 'zaehler',   label: 'Zählerstand (kWh)',     type: 'decimal', req: true  },
+      { key: 'bemerkung', label: 'Bemerkung',              type: 'text',    req: false },
     ],
     headers: ['Datum', 'Zähler neu', 'Zähler ges.', 'Δ kWh', 'kWh/Tag'],
   },
   {
-    key: 'pv', sheet: 'PV-Werte', label: '☀️ PV',
+    key: 'pv', label: '☀️ PV',
     fields: [
       { key: 'zaehler',   label: 'Zähler gesamt (kWh)',   type: 'decimal', req: true  },
       { key: 'pv1',       label: 'PV1 Zähler (optional)', type: 'decimal', req: false },
@@ -38,7 +25,7 @@ const TABS = [
     headers: ['Datum', 'Zähler', 'Δ kWh', 'kWh/Tag', 'PV1/2%'],
   },
   {
-    key: 'wasser', sheet: 'Wasser', label: '💧 Wasser',
+    key: 'wasser', label: '💧 Wasser',
     fields: [
       { key: 'zaehler',   label: 'Wasserstand (m³)',       type: 'decimal', req: true  },
       { key: 'ph',        label: 'pH-Wert',                type: 'decimal', req: false },
@@ -49,7 +36,7 @@ const TABS = [
     headers: ['Datum', 'm³', 'Δ m³', 'm³/Tag'],
   },
   {
-    key: 'heizung', sheet: 'Heizung Stunden', label: '🔥 Heizung',
+    key: 'heizung', label: '🔥 Heizung',
     fields: [
       { key: 'zaehler',   label: 'Volllast-Stunden',       type: 'decimal', req: true  },
       { key: 'druck',     label: 'Druck (bar)',             type: 'decimal', req: false },
@@ -58,7 +45,15 @@ const TABS = [
     headers: ['Datum', 'Std.', 'Δ Std.', 'Std/Tag'],
   },
   {
-    key: 'maschinen', sheet: 'Maschinen', label: '🔧 Masch.',
+    key: 'wallbox', label: '🔌 Wallbox',
+    fields: [
+      { key: 'zaehler',   label: 'Zählerstand (kWh)',      type: 'decimal', req: true  },
+      { key: 'bemerkung', label: 'Bemerkung',               type: 'text',    req: false },
+    ],
+    headers: ['Datum', 'Zähler', 'Δ kWh', 'kWh/Tag'],
+  },
+  {
+    key: 'maschinen', label: '🔧 Masch.',
     fields: [
       { key: 'kategorie', label: 'Kategorie',               type: 'text',    req: true  },
       { key: 'thema',     label: 'Thema',                   type: 'text',    req: false },
@@ -89,29 +84,22 @@ async function pkce() {
 
 function canonicalUrl() {
   const u = new URL(location.href);
-  u.search = '';
-  u.hash   = '';
+  u.search = ''; u.hash = '';
   if (u.pathname.endsWith('index.html')) u.pathname = u.pathname.slice(0, -10);
   if (!u.pathname.endsWith('/'))         u.pathname += '/';
   return u.href;
 }
 
 async function startAuth() {
-  const appKey      = APP_KEY;
   const redirectUri = canonicalUrl();
   const { verifier, challenge } = await pkce();
-
-  sessionStorage.setItem('pkce_verifier',    verifier);
-  sessionStorage.setItem('dropbox_app_key',  appKey);
-  sessionStorage.setItem('redirect_uri',     redirectUri);
-
+  sessionStorage.setItem('pkce_verifier', verifier);
+  sessionStorage.setItem('redirect_uri',  redirectUri);
   const p = new URLSearchParams({
-    response_type:         'code',
-    client_id:             appKey,
-    redirect_uri:          redirectUri,
-    code_challenge:        challenge,
-    code_challenge_method: 'S256',
-    token_access_type:     'offline',
+    response_type: 'code', client_id: APP_KEY,
+    redirect_uri: redirectUri,
+    code_challenge: challenge, code_challenge_method: 'S256',
+    token_access_type: 'offline',
   });
   location.href = AUTH_URL + '?' + p;
 }
@@ -119,27 +107,20 @@ async function startAuth() {
 async function handleCallback() {
   const code = new URLSearchParams(location.search).get('code');
   if (!code) return;
-
-  const appKey      = APP_KEY;
   const verifier    = sessionStorage.getItem('pkce_verifier');
-  const redirectUri = sessionStorage.getItem('redirect_uri')    || canonicalUrl();
-
-  if (!appKey || !verifier) {
+  const redirectUri = sessionStorage.getItem('redirect_uri') || canonicalUrl();
+  if (!verifier) {
     alert('Auth-Fehler: Sitzungsdaten fehlen. Bitte erneut verbinden.');
     history.replaceState({}, '', location.pathname);
     return;
   }
-
   try {
     const r = await fetch(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        code,
-        grant_type:    'authorization_code',
-        client_id:     appKey,
-        redirect_uri:  redirectUri,
-        code_verifier: verifier,
+        code, grant_type: 'authorization_code', client_id: APP_KEY,
+        redirect_uri: redirectUri, code_verifier: verifier,
       }),
     });
     if (!r.ok) throw new Error(await r.text());
@@ -147,19 +128,16 @@ async function handleCallback() {
     localStorage.setItem('dropbox_access_token', d.access_token);
     localStorage.setItem('dropbox_refresh_token', d.refresh_token);
     localStorage.setItem('dropbox_expires',       Date.now() + d.expires_in * 1000);
-  } catch (e) {
-    alert('Token-Fehler: ' + e.message);
-  }
+  } catch (e) { alert('Token-Fehler: ' + e.message); }
   history.replaceState({}, '', location.pathname);
 }
 
-function isConnected() {
-  return !!localStorage.getItem('dropbox_refresh_token');
-}
+function isConnected() { return !!localStorage.getItem('dropbox_refresh_token'); }
 
 function disconnect() {
   ['dropbox_access_token', 'dropbox_refresh_token', 'dropbox_expires']
     .forEach(k => localStorage.removeItem(k));
+  _data = null;
   init();
 }
 
@@ -178,14 +156,13 @@ async function applyUpdate() {
 async function getToken() {
   const exp = +localStorage.getItem('dropbox_expires');
   if (Date.now() < exp - 60_000) return localStorage.getItem('dropbox_access_token');
-
   const r = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      grant_type:    'refresh_token',
+      grant_type: 'refresh_token',
       refresh_token: localStorage.getItem('dropbox_refresh_token'),
-      client_id:     APP_KEY,
+      client_id: APP_KEY,
     }),
   });
   if (!r.ok) throw new Error('Token abgelaufen – bitte neu verbinden.');
@@ -195,90 +172,16 @@ async function getToken() {
   return d.access_token;
 }
 
-// ── Dropbox file I/O ─────────────────────────────────────────
+// ── Date helpers ─────────────────────────────────────────────
 
-async function dbDownload(token) {
-  const r = await fetch(CONTENT + '/files/download', {
-    method:  'POST',
-    headers: {
-      Authorization:     'Bearer ' + token,
-      'Dropbox-API-Arg': JSON.stringify({ path: DROPBOX_PATH }),
-    },
-  });
-  if (!r.ok) {
-    let detail;
-    try { detail = (await r.json()).error_summary; } catch { detail = r.status; }
-    throw new Error('Dropbox ' + r.status + ': ' + detail);
-  }
-  return r.arrayBuffer();
+function fmtDateStr(s) {
+  if (!s) return '–';
+  const [y, m, d] = s.split('-');
+  return `${d}.${m}.${y.slice(2)}`;
 }
 
-async function dbUpload(token, data) {
-  const r = await fetch(CONTENT + '/files/upload', {
-    method:  'POST',
-    headers: {
-      Authorization:      'Bearer ' + token,
-      'Content-Type':     'application/octet-stream',
-      'Dropbox-API-Arg':  JSON.stringify({ path: DROPBOX_PATH, mode: 'overwrite', autorename: false }),
-    },
-    body: data,
-  });
-  if (!r.ok) throw new Error('Upload fehlgeschlagen: ' + r.status);
-}
-
-// ── Excel helpers (SheetJS) ──────────────────────────────────
-
-function xlLastRow(ws) {
-  if (!ws['!ref']) return 3;
-  const rng = XLSX.utils.decode_range(ws['!ref']);
-  for (let r = rng.e.r; r >= 1; r--) {
-    const c = ws[XLSX.utils.encode_cell({ r, c: 0 })];
-    if (c && c.v !== undefined) return r + 1;   // returns 1-indexed
-  }
-  return 3;
-}
-
-function xlGet(ws, row, col) {   // 1-indexed
-  const cell = ws[XLSX.utils.encode_cell({ r: row - 1, c: col - 1 })];
-  return cell ? cell.v : undefined;
-}
-
-function xlSet(ws, row, col, val) {  // 1-indexed
-  const addr = XLSX.utils.encode_cell({ r: row - 1, c: col - 1 });
-  if (val === null || val === undefined) { delete ws[addr]; return; }
-  if (val instanceof Date) {
-    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-    const days = (val - excelEpoch) / 86400000;
-    ws[addr] = { t: 'n', v: days, z: 'dd.mm.yy' };
-  } else if (typeof val === 'number') {
-    ws[addr] = { t: 'n', v: val };
-  } else {
-    ws[addr] = { t: 's', v: String(val) };
-  }
-  _expandRef(ws, row - 1, col - 1);
-}
-
-function xlFormula(ws, row, col, f) {  // 1-indexed
-  const addr = XLSX.utils.encode_cell({ r: row - 1, c: col - 1 });
-  ws[addr] = { t: 'n', f };
-  _expandRef(ws, row - 1, col - 1);
-}
-
-function _expandRef(ws, r, c) {
-  const rng = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
-  rng.e.r = Math.max(rng.e.r, r);
-  rng.e.c = Math.max(rng.e.c, c);
-  ws['!ref'] = XLSX.utils.encode_range(rng);
-}
-
-function fmtDate(v) {
-  if (v == null) return '–';
-  if (typeof v === 'number') {
-    const offset = workbookIs1904 ? 24107 : 25569;
-    const d = new Date(Math.round((v - offset) * 86400) * 1000);
-    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC' });
-  }
-  return String(v);
+function dateDiffDays(a, b) {
+  return (new Date(b) - new Date(a)) / 86400000;
 }
 
 function safeRound(v, d = 2) {
@@ -287,202 +190,313 @@ function safeRound(v, d = 2) {
   return d === 0 ? String(Math.round(n)) : n.toFixed(d);
 }
 
-// ── Recent rows ──────────────────────────────────────────────
-
-function recentRows(ws, key, count = 10) {
-  const last = xlLastRow(ws);
-
-  if (key === 'maschinen') {
-    const startRow = Math.max(2, last - count + 1);
-    const rows = [], rowNums = [];
-    for (let r = startRow; r <= last; r++) {
-      rows.push([
-        fmtDate(xlGet(ws, r, 1)),
-        xlGet(ws, r, 2) ?? '–',
-        xlGet(ws, r, 3) ?? '–',
-        safeRound(xlGet(ws, r, 5)),
-      ]);
-      rowNums.push(r);
-    }
-    const hasMore = startRow > 2;
-    return { rows: rows.slice(-count), rowNums: rowNums.slice(-count), hasMore };
+function serialToIso(serial, is1904) {
+  if (serial == null) return null;
+  if (typeof serial === 'string') {
+    const m = serial.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(serial)) return serial;
+    return null;
   }
-
-  const start = Math.max(3, last - count);
-  const raw   = [];
-  for (let r = start; r <= last; r++) {
-    raw.push({
-      dv:  xlGet(ws, r, 1),
-      z:   key === 'pv' ? xlGet(ws, r, 4) : xlGet(ws, r, 2),
-      zc:  key === 'strom' ? xlGet(ws, r, 3) : null,
-      pv1: key === 'pv' ? xlGet(ws, r, 6) : null,
-      r,
-    });
-  }
-
-  // Anzeigegenauigkeit: [z, delta, perDay]
-  const dd = { strom: [0,0,1], pv: [0,0,1], wasser: [0,1,2], heizung: [0,0,1] }[key] ?? [2,2,2];
-
-  const rows = [], rowNums = [];
-  for (let i = 1; i < raw.length; i++) {
-    const { dv, z, zc, pv1, r }                  = raw[i];
-    const { dv: dvp, z: zp, zc: zcp, pv1: pv1p } = raw[i - 1];
-    let delta = null, perDay = null, ratio = null;
-    try {
-      // Strom: Delta aus Zähler ges. (Sp. C) berechnen – hat lückenlos Werte
-      const dz = (key === 'strom') ? (zc - zcp) : (z - zp);
-      delta = Math.round(dz * 1000) / 1000;
-      if (typeof dv === 'number' && typeof dvp === 'number') {
-        const days = dv - dvp;
-        if (days > 0) {
-          perDay = Math.round(dz / days * 10 ** dd[2]) / 10 ** dd[2];
-        }
-      }
-    } catch {}
-    if (key === 'pv' && pv1 != null && pv1p != null) {
-      try {
-        const dPv1 = pv1 - pv1p;
-        if (delta > 0) {
-          const pct1 = Math.round(dPv1 / delta * 100);
-          ratio = pct1 + '/' + (100 - pct1);
-        }
-      } catch {}
-    }
-    const row = [fmtDate(dv), safeRound(z, dd[0]), safeRound(delta, dd[1]), safeRound(perDay, dd[2])];
-    if (key === 'strom') row.splice(2, 0, safeRound(zc, 0));
-    if (key === 'pv') row.push(ratio ?? '–');
-    rows.push(row);
-    rowNums.push(r);
-  }
-  const hasMore = start > 3;
-  return { rows: rows.slice(-count), rowNums: rowNums.slice(-count), hasMore };
+  if (typeof serial !== 'number') return null;
+  const offset = is1904 ? 24107 : 25569;
+  const ms = Math.round((serial - offset) * 86400) * 1000;
+  return new Date(ms).toISOString().slice(0, 10);
 }
 
-// ── Read row fields for editing ──────────────────────────────
+// ── Dropbox JSON I/O ─────────────────────────────────────────
 
-function readRowFields(ws, key, rowNum) {
-  const r = rowNum;
-  const datumSerial = xlGet(ws, r, 1);
-  let dateStr = '';
-  if (typeof datumSerial === 'number') {
-    const offset = workbookIs1904 ? 24107 : 25569;
-    const ms = Math.round((datumSerial - offset) * 86400) * 1000;
-    dateStr = new Date(ms).toISOString().slice(0, 10);
+async function jsonDownload(token) {
+  const r = await fetch(CONTENT + '/files/download', {
+    method: 'POST',
+    headers: {
+      Authorization:     'Bearer ' + token,
+      'Dropbox-API-Arg': JSON.stringify({ path: DROPBOX_JSON_PATH }),
+    },
+  });
+  if (r.status === 409) return null; // file not found
+  if (!r.ok) {
+    let detail;
+    try { detail = (await r.json()).error_summary; } catch { detail = r.status; }
+    throw new Error('Dropbox ' + r.status + ': ' + detail);
   }
-
-  const fields = {};
-  if (key === 'strom') {
-    fields.zaehler   = xlGet(ws, r, 2);
-    fields.bemerkung = xlGet(ws, r, 8);
-  } else if (key === 'pv') {
-    fields.zaehler   = xlGet(ws, r, 4);
-    fields.pv1       = xlGet(ws, r, 6);
-    fields.bemerkung = xlGet(ws, r, 17);
-  } else if (key === 'wasser') {
-    fields.zaehler   = xlGet(ws, r, 2);
-    fields.ph        = xlGet(ws, r, 7);
-    fields.haerte    = xlGet(ws, r, 8);
-    fields.druck     = xlGet(ws, r, 9);
-    fields.bemerkung = xlGet(ws, r, 10);
-  } else if (key === 'heizung') {
-    fields.zaehler   = xlGet(ws, r, 2);
-    fields.druck     = xlGet(ws, r, 3);
-    fields.bemerkung = xlGet(ws, r, 9);
-  } else if (key === 'maschinen') {
-    fields.kategorie = xlGet(ws, r, 2);
-    fields.thema     = xlGet(ws, r, 3);
-    fields.zaehler   = xlGet(ws, r, 4);
-    fields.kosten    = xlGet(ws, r, 5);
-  }
-
-  return { dateStr, fields };
+  return r.json();
 }
 
-// ── Write row ────────────────────────────────────────────────
-
-function writeRow(ws, key, p, n, dateSerial, fields) {
-  const sc = (col, v) => xlSet(ws, n, col, v);
-  const sf = (col, f) => xlFormula(ws, n, col, f);
-  const z  = fields.zaehler;
-
-  const dateAddr = XLSX.utils.encode_cell({ r: n - 1, c: 0 });
-  ws[dateAddr] = { t: 'n', v: dateSerial, z: 'DD.MM.YYYY' };
-  _expandRef(ws, n - 1, 0);
-
-  if (key === 'strom') {
-    sc(2, z);
-    sf(3, `C${p}+B${n}-B${p}`);
-    sf(4, `C${n}-C${p}`);
-    sf(5, `D${n}/(A${n}-A${p})`);
-    sf(6, `(C${n}-$C$3)/(A${n}-$A$3)`);
-    sf(7, `A${n}-A${p}`);
-    sc(8, fields.bemerkung || '');
-
-  } else if (key === 'pv') {
-    sf(2, `YEAR(A${n})`);
-    sf(3, `D${n}-D${p}`);
-    sc(4, z);
-    sf(5, `E${p}+C${n}`);
-    sc(6, fields.pv1 != null ? fields.pv1 : xlGet(ws, p, 6));
-    sf(7, `E${n}-F${n}`);
-    sf(8, `K${n}/I${n}`);
-    sf(9, `C${n}/DATEDIF(A${p},A${n},"D")`);
-    sf(10, `(F${n}-F${p})/DATEDIF(A${p},A${n},"D")`);
-    sf(11, `(G${n}-G${p})/DATEDIF(A${p},A${n},"D")`);
-    sf(12, `J${n}/21.45`);
-    sf(13, `K${n}/29.5`);
-    sf(14, `I${n}/(21.45+29.5)`);
-    sf(15, `(E${n}-$E$3)/(A${n}-$A$3)`);
-    sf(16, `(G${n}-$G$64)/(A${n}-$A$64)`);
-    sc(17, fields.bemerkung || '');
-
-  } else if (key === 'wasser') {
-    sc(2, z);
-    sf(3, `B${n}-B${p}`);
-    sf(4, `C${n}/(A${n}-A${p})`);
-    sf(5, `(B${n}-$B$3)/(A${n}-$A$3)`);
-    sf(6, `A${n}-A${p}`);
-    sc(7, fields.ph);
-    sc(8, fields.haerte);
-    sc(9, fields.druck);
-    sc(10, fields.bemerkung || '');
-
-  } else if (key === 'heizung') {
-    sc(2, z);
-    sc(3, fields.druck);
-    sf(4, `B${n}-B${p}`);
-    sf(5, `D${n}/(A${n}-A${p})`);
-    sf(6, `E${n}/24`);
-    sf(7, `(B${n}-$B$4)/(A${n}-$A$4)`);
-    sf(8, `A${n}-A${p}`);
-    sc(9, fields.bemerkung || '');
-
-  } else if (key === 'maschinen') {
-    sc(2, fields.kategorie || '');
-    sc(3, fields.thema || '');
-    sc(4, z);
-    sc(5, fields.kosten);
-  }
+async function jsonUpload(token, data) {
+  const r = await fetch(CONTENT + '/files/upload', {
+    method: 'POST',
+    headers: {
+      Authorization:     'Bearer ' + token,
+      'Content-Type':    'application/octet-stream',
+      'Dropbox-API-Arg': JSON.stringify({ path: DROPBOX_JSON_PATH, mode: 'overwrite', autorename: false }),
+    },
+    body: new TextEncoder().encode(JSON.stringify(data)),
+  });
+  if (!r.ok) throw new Error('Upload fehlgeschlagen: ' + r.status);
 }
 
-function extendTable(ws, sheetName, n) {
-  const tname = TABLE_MAP[sheetName];
-  if (!tname || !ws['!tables']) return;
-  const t = ws['!tables'].find(t => t.name === tname);
-  if (t) {
-    const rng = XLSX.utils.decode_range(t.ref);
-    rng.e.r = n - 1;
-    t.ref = XLSX.utils.encode_range(rng);
+// ── Excel download + helpers (migration only) ─────────────────
+
+async function xlsDownload(token) {
+  const r = await fetch(CONTENT + '/files/download', {
+    method: 'POST',
+    headers: {
+      Authorization:     'Bearer ' + token,
+      'Dropbox-API-Arg': JSON.stringify({ path: DROPBOX_XLS_PATH }),
+    },
+  });
+  if (!r.ok) throw new Error('Excel-Download fehlgeschlagen: ' + r.status);
+  return r.arrayBuffer();
+}
+
+function xlGet(ws, row, col) {
+  const cell = ws[XLSX.utils.encode_cell({ r: row - 1, c: col - 1 })];
+  return cell ? cell.v : undefined;
+}
+
+function xlLastRow(ws) {
+  if (!ws['!ref']) return 1;
+  const rng = XLSX.utils.decode_range(ws['!ref']);
+  for (let r = rng.e.r; r >= 1; r--) {
+    const c = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+    if (c && c.v !== undefined) return r + 1;
   }
+  return 1;
 }
 
 // ── App state ────────────────────────────────────────────────
 
-let tabIdx         = 0;
-let katCategories  = [];
-let workbookIs1904 = false;
-let editRowNum     = null;   // null = neuer Eintrag, Zahl = Bearbeitungsmodus
-let recentCount    = 10;     // Anzahl angezeigter Einträge
+let tabIdx        = 0;
+let katCategories = [];
+let editIdx       = null;
+let recentCount   = 10;
+let _data         = null;
+
+function emptyData() {
+  return { v: 1, strom: [], pv: [], wasser: [], heizung: [], wallbox: [], maschinen: [] };
+}
+
+// ── Data load / save ─────────────────────────────────────────
+
+async function loadData() {
+  const token = await getToken();
+  const json  = await jsonDownload(token);
+  _data = json || emptyData();
+  if (!_data.wallbox) _data.wallbox = [];
+  return _data;
+}
+
+async function saveData() {
+  const token = await getToken();
+  await jsonUpload(token, _data);
+}
+
+// ── Strom: recalculate zaehler_ges from index onwards ────────
+
+function recalcStromGes(arr, fromIdx) {
+  for (let i = Math.max(1, fromIdx); i < arr.length; i++) {
+    const prev = arr[i - 1];
+    arr[i].zaehler_ges = (prev.zaehler_ges ?? prev.zaehler) + (arr[i].zaehler - prev.zaehler);
+  }
+}
+
+// ── Recent rows from JSON ────────────────────────────────────
+
+function recentRowsJson(entries, key, count) {
+  if (!entries || entries.length === 0) return { rows: [], idxs: [], hasMore: false };
+
+  if (key === 'maschinen') {
+    const start = Math.max(0, entries.length - count);
+    const slice = entries.slice(start);
+    return {
+      rows: slice.map(e => [
+        fmtDateStr(e.datum),
+        e.kategorie ?? '–',
+        e.thema     ?? '–',
+        e.kosten != null ? safeRound(e.kosten, 2) : '–',
+      ]),
+      idxs:    slice.map((_, i) => start + i),
+      hasMore: start > 0,
+    };
+  }
+
+  const start = Math.max(0, entries.length - count - 1);
+  const slice = entries.slice(start);
+  const dd    = { strom: [0, 0, 1], pv: [0, 0, 1], wasser: [0, 1, 2], heizung: [0, 0, 1], wallbox: [0, 0, 1] }[key] ?? [2, 2, 2];
+  const rows  = [], idxs = [];
+
+  for (let i = 1; i < slice.length; i++) {
+    const cur  = slice[i];
+    const prv  = slice[i - 1];
+    let delta = null, perDay = null;
+
+    if (key === 'strom') {
+      const curG = cur.zaehler_ges ?? cur.zaehler;
+      const prvG = prv.zaehler_ges ?? prv.zaehler;
+      delta = Math.round((curG - prvG) * 1000) / 1000;
+      const days = dateDiffDays(prv.datum, cur.datum);
+      if (days > 0) perDay = Math.round(delta / days * 10) / 10;
+      rows.push([
+        fmtDateStr(cur.datum),
+        safeRound(cur.zaehler, 0),
+        safeRound(curG, 0),
+        safeRound(delta, 0),
+        safeRound(perDay, 1),
+      ]);
+
+    } else if (key === 'pv') {
+      const dz   = cur.zaehler - prv.zaehler;
+      delta      = Math.round(dz * 1000) / 1000;
+      const days = dateDiffDays(prv.datum, cur.datum);
+      if (days > 0) perDay = Math.round(dz / days * 10) / 10;
+      let ratio = null;
+      if (cur.pv1 != null && prv.pv1 != null && delta > 0) {
+        const pct1 = Math.round((cur.pv1 - prv.pv1) / delta * 100);
+        ratio = pct1 + '/' + (100 - pct1);
+      }
+      rows.push([
+        fmtDateStr(cur.datum),
+        safeRound(cur.zaehler, 0),
+        safeRound(delta, 0),
+        safeRound(perDay, 1),
+        ratio ?? '–',
+      ]);
+
+    } else {
+      const dz   = parseFloat(cur.zaehler) - parseFloat(prv.zaehler);
+      delta      = Math.round(dz * 1000) / 1000;
+      const days = dateDiffDays(prv.datum, cur.datum);
+      if (days > 0) perDay = Math.round(dz / days * 10 ** dd[2]) / 10 ** dd[2];
+      rows.push([
+        fmtDateStr(cur.datum),
+        safeRound(cur.zaehler, dd[0]),
+        safeRound(delta, dd[1]),
+        safeRound(perDay, dd[2]),
+      ]);
+    }
+
+    idxs.push(start + i);
+  }
+
+  return { rows: rows.slice(-count), idxs: idxs.slice(-count), hasMore: start > 0 };
+}
+
+// ── Migration from Excel ──────────────────────────────────────
+
+async function migrateFromExcel() {
+  const btn = document.getElementById('migrate-btn');
+  if (btn) btn.textContent = '⏳ Migriere…';
+  try {
+    const token = await getToken();
+    const buf   = await xlsDownload(token);
+    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true });
+    const is1904 = wb.Workbook?.WBProps?.date1904 ?? false;
+
+    const result = emptyData();
+
+    // Strom (data from row 3, col: 1=datum, 2=zaehler_neu, 3=zaehler_ges, 8=bemerkung)
+    const wsStrom = wb.Sheets['Strom'];
+    if (wsStrom) {
+      const last = xlLastRow(wsStrom);
+      for (let r = 3; r <= last; r++) {
+        const datum = serialToIso(xlGet(wsStrom, r, 1), is1904);
+        if (!datum) continue;
+        result.strom.push({
+          datum,
+          zaehler:     xlGet(wsStrom, r, 2) ?? null,
+          zaehler_ges: xlGet(wsStrom, r, 3) ?? null,
+          bemerkung:   xlGet(wsStrom, r, 8) || null,
+        });
+      }
+    }
+
+    // PV-Werte (data from row 3, col: 1=datum, 4=zaehler, 6=pv1, 17=bemerkung)
+    const wsPv = wb.Sheets['PV-Werte'];
+    if (wsPv) {
+      const last = xlLastRow(wsPv);
+      for (let r = 3; r <= last; r++) {
+        const datum = serialToIso(xlGet(wsPv, r, 1), is1904);
+        if (!datum) continue;
+        result.pv.push({
+          datum,
+          zaehler:   xlGet(wsPv, r, 4)  ?? null,
+          pv1:       xlGet(wsPv, r, 6)  ?? null,
+          bemerkung: xlGet(wsPv, r, 17) || null,
+        });
+      }
+    }
+
+    // Wasser (data from row 3, col: 1=datum, 2=zaehler, 7=ph, 8=haerte, 9=druck, 10=bemerkung)
+    const wsWasser = wb.Sheets['Wasser'];
+    if (wsWasser) {
+      const last = xlLastRow(wsWasser);
+      for (let r = 3; r <= last; r++) {
+        const datum = serialToIso(xlGet(wsWasser, r, 1), is1904);
+        if (!datum) continue;
+        result.wasser.push({
+          datum,
+          zaehler:   xlGet(wsWasser, r, 2)  ?? null,
+          ph:        xlGet(wsWasser, r, 7)  ?? null,
+          haerte:    xlGet(wsWasser, r, 8)  ?? null,
+          druck:     xlGet(wsWasser, r, 9)  ?? null,
+          bemerkung: xlGet(wsWasser, r, 10) || null,
+        });
+      }
+    }
+
+    // Heizung Stunden (data from row 3, col: 1=datum, 2=zaehler, 3=druck, 9=bemerkung)
+    const wsHeizung = wb.Sheets['Heizung Stunden'];
+    if (wsHeizung) {
+      const last = xlLastRow(wsHeizung);
+      for (let r = 3; r <= last; r++) {
+        const datum = serialToIso(xlGet(wsHeizung, r, 1), is1904);
+        if (!datum) continue;
+        result.heizung.push({
+          datum,
+          zaehler:   xlGet(wsHeizung, r, 2) ?? null,
+          druck:     xlGet(wsHeizung, r, 3) ?? null,
+          bemerkung: xlGet(wsHeizung, r, 9) || null,
+        });
+      }
+    }
+
+    // Maschinen (data from row 2, col: 1=datum, 2=kategorie, 3=thema, 4=zaehler, 5=kosten)
+    const wsMasch = wb.Sheets['Maschinen'];
+    if (wsMasch) {
+      const last = xlLastRow(wsMasch);
+      for (let r = 2; r <= last; r++) {
+        const datum = serialToIso(xlGet(wsMasch, r, 1), is1904);
+        if (!datum) continue;
+        result.maschinen.push({
+          datum,
+          kategorie: xlGet(wsMasch, r, 2) || null,
+          thema:     xlGet(wsMasch, r, 3) || null,
+          zaehler:   xlGet(wsMasch, r, 4) ?? null,
+          kosten:    xlGet(wsMasch, r, 5) ?? null,
+        });
+      }
+    }
+
+    const counts = Object.entries(result)
+      .filter(([k]) => k !== 'v')
+      .map(([k, v]) => `${k}: ${v.length} Einträge`)
+      .join('\n');
+
+    if (!confirm(`Migration bereit:\n\n${counts}\n\nDaten jetzt speichern?`)) {
+      if (btn) btn.textContent = '📥 Aus Excel migrieren';
+      return;
+    }
+
+    _data = result;
+    await saveData();
+    if (btn) btn.textContent = '✅ Migriert!';
+    loadRecent();
+  } catch (e) {
+    alert('Fehler bei Migration: ' + e.message);
+    if (btn) btn.textContent = '📥 Aus Excel migrieren';
+  }
+}
 
 // ── Setup screen ─────────────────────────────────────────────
 
@@ -516,7 +530,8 @@ function renderApp() {
           <div class="recent-table" id="recent-table">Lade…</div>
         </div>
         <div class="footer-links">
-          <button class="link-btn" id="update-btn" style="color:var(--blue)" onclick="applyUpdate()">🔄 Aktualisieren</button>
+          <button class="link-btn" style="color:var(--blue)" onclick="applyUpdate()">🔄 Aktualisieren</button>
+          <button id="migrate-btn" class="link-btn" style="color:var(--blue)" onclick="migrateFromExcel()">📥 Aus Excel migrieren</button>
           <button class="link-btn" onclick="disconnect()">Dropbox trennen</button>
           <span class="app-version">${APP_VERSION}</span>
         </div>
@@ -535,7 +550,7 @@ function renderTabBar() {
 
 function switchTab(i) {
   tabIdx = i;
-  editRowNum = null;
+  editIdx = null;
   recentCount = 10;
   renderTabBar();
   renderForm();
@@ -547,46 +562,41 @@ function switchTab(i) {
 function renderForm() {
   const tab    = TABS[tabIdx];
   const today  = new Date().toISOString().slice(0, 10);
-  const isEdit = editRowNum !== null;
+  const isEdit = editIdx !== null;
 
   let html = `
     <div class="field-group">
       <label>Datum</label>
       <input type="date" id="f-datum" value="${today}"${isEdit ? '' : ` max="${today}"`}>
-    </div>
-  `;
+    </div>`;
+
   for (const f of tab.fields) {
     const reqStar = f.req ? ' <span class="req">*</span>' : '';
     if (f.key === 'kategorie') {
       html += `
         <div class="field-group">
           <label>${f.label}${reqStar}</label>
-          <input id="f-kategorie" type="text" autocomplete="off"
-                 autocorrect="off" spellcheck="false"
-                 oninput="onKatInput(this)">
+          <input id="f-kategorie" type="text" autocomplete="off" autocorrect="off"
+                 spellcheck="false" oninput="onKatInput(this)">
           <div id="kat-bar" class="suggestion-bar" style="display:none"></div>
-        </div>
-      `;
+        </div>`;
     } else {
-      const mode = f.type === 'decimal' ? 'decimal' : 'text';
       html += `
         <div class="field-group">
           <label>${f.label}${reqStar}</label>
-          <input id="f-${f.key}" type="text" inputmode="${mode}"
+          <input id="f-${f.key}" type="text"
+                 inputmode="${f.type === 'decimal' ? 'decimal' : 'text'}"
                  placeholder="${f.req ? '' : 'optional'}">
-        </div>
-      `;
+        </div>`;
     }
   }
 
   if (isEdit) {
-    html += `<div class="edit-banner">✏️ Zeile ${editRowNum} wird bearbeitet</div>`;
+    html += `<div class="edit-banner">✏️ Eintrag #${editIdx + 1} wird bearbeitet</div>`;
     html += `<button class="btn-secondary" onclick="cancelEdit()">Abbrechen</button>`;
   }
-  html += `
-    <button class="btn-primary" onclick="onSubmit()">${isEdit ? 'Änderung speichern' : 'Eintragen'}</button>
-    <div class="status" id="status"></div>
-  `;
+  html += `<button class="btn-primary" onclick="onSubmit()">${isEdit ? 'Änderung speichern' : 'Eintragen'}</button>`;
+  html += `<div class="status" id="status"></div>`;
   document.getElementById('form-card').innerHTML = html;
 }
 
@@ -613,44 +623,36 @@ function pickKat(cat) {
   if (bar) bar.style.display = 'none';
 }
 
-// ── Render recent table (HTML) ────────────────────────────────
+// ── Render recent table ───────────────────────────────────────
 
-function renderRecentTable(tab, rows, rowNums, hasMore) {
-  const hdrs       = tab.headers;
-  const isMaschinen = tab.key === 'maschinen';
-
+function renderRecentTable(tab, rows, idxs, hasMore) {
+  const hdrs   = tab.headers;
+  const isMasch = tab.key === 'maschinen';
   const colClass = (i) => {
     if (i === 0) return 'col-date';
-    if (isMaschinen && i === 1) return 'col-kat';
-    if (isMaschinen && i === 2) return 'col-thema';
-    if (isMaschinen && i === 3) return 'col-num col-kosten';
+    if (isMasch && i === 1) return 'col-kat';
+    if (isMasch && i === 2) return 'col-thema';
+    if (isMasch && i === 3) return 'col-num col-kosten';
     return 'col-num';
   };
 
   let html = '<table class="rt"><thead><tr>';
-  hdrs.forEach((h, i) => {
-    html += `<th class="${colClass(i)}">${h}</th>`;
-  });
+  hdrs.forEach((h, i) => { html += `<th class="${colClass(i)}">${h}</th>`; });
   html += '</tr></thead><tbody>';
 
-  // Neueste zuerst
   for (let i = rows.length - 1; i >= 0; i--) {
     const row    = rows[i];
-    const rNum   = rowNums[i];
-    const active = rNum === editRowNum;
-    html += `<tr class="rt-row${active ? ' rt-editing' : ''}" data-row="${rNum}" onclick="startEdit(${rNum})">`;
-    row.forEach((v, ci) => {
-      html += `<td class="${colClass(ci)}">${v ?? '–'}</td>`;
-    });
+    const idx    = idxs[i];
+    const active = idx === editIdx;
+    html += `<tr class="rt-row${active ? ' rt-editing' : ''}" data-idx="${idx}" onclick="startEdit(${idx})">`;
+    row.forEach((v, ci) => { html += `<td class="${colClass(ci)}">${v ?? '–'}</td>`; });
     html += '</tr>';
   }
 
   html += '</tbody></table>';
-
   if (hasMore) {
     html += `<div class="more-bar"><button class="more-btn" onclick="loadMore()">Mehr anzeigen ↑</button></div>`;
   }
-
   return html;
 }
 
@@ -661,27 +663,24 @@ async function loadRecent() {
   if (tbl) tbl.textContent = 'Lade…';
   const tab = TABS[tabIdx];
   try {
-    const token = await getToken();
-    const buf   = await dbDownload(token);
-    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true });
-    workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
-    const ws    = wb.Sheets[tab.sheet];
-    if (!ws) throw new Error(`Tabellenblatt "${tab.sheet}" nicht gefunden.`);
-
-    const { rows, rowNums, hasMore } = recentRows(ws, tab.key, recentCount);
+    if (!_data) await loadData();
+    const entries = _data[tab.key] || [];
 
     if (tab.key === 'maschinen') {
-      const last = xlLastRow(ws);
-      katCategories = [...new Set(
-        Array.from({ length: Math.max(0, last - 1) }, (_, i) => xlGet(ws, i + 2, 2))
-          .filter(Boolean).map(String)
-      )].sort();
+      katCategories = [...new Set(entries.map(e => e.kategorie).filter(Boolean))].sort();
     }
 
-    if (tbl) tbl.innerHTML = renderRecentTable(tab, rows, rowNums, hasMore);
+    const { rows, idxs, hasMore } = recentRowsJson(entries, tab.key, recentCount);
 
+    if (tbl) {
+      if (rows.length === 0) {
+        tbl.innerHTML = '<p style="color:var(--label);font-size:13px;padding:4px 0">Noch keine Einträge. Daten via „Aus Excel migrieren" importieren.</p>';
+      } else {
+        tbl.innerHTML = renderRecentTable(tab, rows, idxs, hasMore);
+      }
+    }
   } catch (e) {
-    if (tbl) { tbl.textContent = '❌ ' + e.message; }
+    if (tbl) tbl.textContent = '❌ ' + e.message;
   }
 }
 
@@ -690,53 +689,45 @@ function loadMore() {
   loadRecent();
 }
 
-// ── Edit existing row ─────────────────────────────────────────
+// ── Edit existing entry ──────────────────────────────────────
 
-async function startEdit(rowNum) {
+async function startEdit(idx) {
   const tab    = TABS[tabIdx];
   const status = document.getElementById('status');
   if (status) { status.textContent = '⏳ Lade…'; status.className = 'status'; }
-
   try {
-    const token = await getToken();
-    const buf   = await dbDownload(token);
-    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true });
-    workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
-    const ws    = wb.Sheets[tab.sheet];
-    if (!ws) throw new Error('Blatt nicht gefunden');
+    if (!_data) await loadData();
+    const entry = (_data[tab.key] || [])[idx];
+    if (!entry) throw new Error('Eintrag nicht gefunden');
 
-    const { dateStr, fields } = readRowFields(ws, tab.key, rowNum);
-
-    editRowNum = rowNum;
+    editIdx = idx;
     renderForm();
 
     const datumEl = document.getElementById('f-datum');
-    if (datumEl && dateStr) datumEl.value = dateStr;
+    if (datumEl && entry.datum) datumEl.value = entry.datum;
 
     for (const f of tab.fields) {
       const el = document.getElementById('f-' + f.key);
-      if (el && fields[f.key] != null) {
-        el.value = String(fields[f.key]);
-      }
+      if (el && entry[f.key] != null) el.value = String(entry[f.key]);
     }
 
     updateEditHighlight();
     document.getElementById('form-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
+    if (status) { status.textContent = ''; status.className = 'status'; }
   } catch (e) {
     if (status) { status.textContent = '❌ ' + e.message; status.className = 'status err'; }
   }
 }
 
 function cancelEdit() {
-  editRowNum = null;
+  editIdx = null;
   renderForm();
   updateEditHighlight();
 }
 
 function updateEditHighlight() {
   document.querySelectorAll('.rt-row').forEach(tr => {
-    tr.classList.toggle('rt-editing', +tr.dataset.row === editRowNum);
+    tr.classList.toggle('rt-editing', +tr.dataset.idx === editIdx);
   });
 }
 
@@ -744,7 +735,7 @@ function updateEditHighlight() {
 
 async function onSubmit() {
   const tab    = TABS[tabIdx];
-  const isEdit = editRowNum !== null;
+  const isEdit = editIdx !== null;
   const status = document.getElementById('status');
   const setStatus = (msg, ok = true) => {
     if (!status) return;
@@ -760,59 +751,50 @@ async function onSubmit() {
   }
 
   const dateStr = document.getElementById('f-datum').value;
-  const [yr, mo, dy] = dateStr.split('-').map(Number);
-  const date = new Date(yr, mo - 1, dy, 12, 0, 0);
+  if (!dateStr) { setStatus('⚠️ Datum erforderlich', false); return; }
 
-  const fields = {};
+  const entry = { datum: dateStr };
   for (const f of tab.fields) {
     let v = document.getElementById('f-' + f.key)?.value.trim() ?? '';
     if (f.type === 'decimal' && v) {
       v = v.replace(',', '.');
       const n = parseFloat(v);
-      fields[f.key] = isNaN(n) ? null : n;
+      entry[f.key] = isNaN(n) ? null : n;
     } else {
-      fields[f.key] = v || null;
+      entry[f.key] = v || null;
     }
+  }
+
+  // Strom: compute zaehler_ges based on previous entry
+  if (tab.key === 'strom') {
+    const arr     = _data?.strom || [];
+    const prevIdx = isEdit ? editIdx - 1 : arr.length - 1;
+    const prev    = arr[prevIdx];
+    entry.zaehler_ges = prev
+      ? (prev.zaehler_ges ?? prev.zaehler) + (entry.zaehler - prev.zaehler)
+      : entry.zaehler;
   }
 
   setStatus('⏳ Speichern…');
   try {
-    const token = await getToken();
-    const buf   = await dbDownload(token);
-    const wb    = XLSX.read(new Uint8Array(buf), { type: 'array', cellStyles: true });
-    workbookIs1904 = wb.Workbook?.WBProps?.date1904 ?? false;
-    const ws    = wb.Sheets[tab.sheet];
-    if (!ws) throw new Error(`Tabellenblatt "${tab.sheet}" nicht gefunden.`);
+    if (!_data) await loadData();
+    const arr = _data[tab.key] || (_data[tab.key] = []);
 
-    const epoch      = workbookIs1904 ? new Date(Date.UTC(1904, 0, 1)) : new Date(Date.UTC(1899, 11, 30));
-    const dateSerial = Math.round((date - epoch) / 86400000);
-
-    let savedRow;
     if (isEdit) {
-      const n = editRowNum;
-      const p = n - 1;
-      writeRow(ws, tab.key, p, n, dateSerial, fields);
-      savedRow = n;
+      arr[editIdx] = entry;
+      if (tab.key === 'strom') recalcStromGes(arr, editIdx + 1);
     } else {
-      const p = xlLastRow(ws);
-      const n = p + 1;
-      writeRow(ws, tab.key, p, n, dateSerial, fields);
-      extendTable(ws, tab.sheet, n);
-      savedRow = n;
+      arr.push(entry);
     }
 
-    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellStyles: true });
-    await dbUpload(token, new Uint8Array(out));
+    await saveData();
 
-    const successMsg = isEdit
-      ? '✅ Zeile ' + savedRow + ' aktualisiert → Dropbox'
-      : '✅ Zeile ' + savedRow + ' gespeichert → Dropbox';
-
+    const msg = isEdit ? '✅ Eintrag aktualisiert' : '✅ Eintrag gespeichert';
     if (isEdit) {
-      editRowNum = null;
+      editIdx = null;
       renderForm();
       const s = document.getElementById('status');
-      if (s) { s.textContent = successMsg; s.className = 'status ok'; }
+      if (s) { s.textContent = msg; s.className = 'status ok'; }
     } else {
       for (const f of tab.fields) {
         const el = document.getElementById('f-' + f.key);
@@ -820,11 +802,10 @@ async function onSubmit() {
       }
       const bar = document.getElementById('kat-bar');
       if (bar) bar.style.display = 'none';
-      setStatus(successMsg);
+      setStatus(msg);
     }
 
     loadRecent();
-
   } catch (e) {
     setStatus('❌ ' + e.message.slice(0, 100), false);
   }
@@ -836,11 +817,7 @@ async function init() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
-
-  if (location.search.includes('code=')) {
-    await handleCallback();
-  }
-
+  if (location.search.includes('code=')) await handleCallback();
   if (isConnected()) {
     renderApp();
     loadRecent();
