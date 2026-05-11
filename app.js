@@ -3,7 +3,7 @@
 // ── Config ────────────────────────────────────────────────────
 const DROPBOX_JSON_PATH = '/Apps/Claude/Messdaten/messdaten.json';
 const APP_KEY           = 's2ggv6zysmzn7fa';
-const APP_VERSION       = 'v7';
+const APP_VERSION       = 'v8';
 
 const TABS = [
   {
