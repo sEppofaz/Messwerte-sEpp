@@ -107,6 +107,25 @@
       appearance: none;
     }
     .field-group input:focus { outline: none; border-color: var(--blue); }
+    .field-group textarea {
+      display: block;
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 17px;
+      font-family: inherit;
+      background: var(--card);
+      color: var(--text);
+      margin-bottom: 10px;
+      -webkit-appearance: none;
+      appearance: none;
+      resize: none;
+      overflow: hidden;
+      min-height: 44px;
+      line-height: 1.4;
+    }
+    .field-group textarea:focus { outline: none; border-color: var(--blue); }
 
     /* ── Buttons ── */
     .btn-primary {
@@ -197,9 +216,22 @@
     .rt .col-kosten {
       padding-left: 12px;
     }
+    .rt .col-rem {
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--label);
+      font-size: 11px;
+    }
     .rt-row { cursor: pointer; }
     .rt-row:active td { background: var(--chip); }
     .rt-editing td { background: #e8f0fe; }
+
+    /* Desktop-only Spalten auf Mobile Portrait ausblenden */
+    @media (max-width: 600px) and (orientation: portrait) {
+      .col-extra { display: none; }
+    }
 
     /* ── More button ── */
     .more-bar { text-align: center; padding-top: 8px; }

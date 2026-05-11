@@ -3,63 +3,70 @@
 // ── Config ────────────────────────────────────────────────────
 const DROPBOX_JSON_PATH = '/Apps/Claude/Messdaten/messdaten.json';
 const APP_KEY           = 's2ggv6zysmzn7fa';
-const APP_VERSION       = 'v6';
+const APP_VERSION       = 'v7';
 
 const TABS = [
   {
     key: 'strom', label: '⚡ Strom',
     fields: [
-      { key: 'zaehler',   label: 'Zählerstand (kWh)',     type: 'decimal', req: true  },
-      { key: 'bemerkung', label: 'Bemerkung',              type: 'text',    req: false },
+      { key: 'zaehler',   label: 'Zählerstand (kWh)', type: 'decimal', req: true  },
+      { key: 'bemerkung', label: 'Bemerkung',           type: 'text',   req: false },
     ],
-    headers: ['Datum', 'Zähler neu', 'Zähler ges.', 'Δ kWh', 'kWh/Tag'],
+    headers:     ['Datum', 'Tage', 'Zähler neu', 'Zähler ges.', 'Δ kWh', 'kWh/Tag', 'Ø kWh/Tag', 'Bemerkung'],
+    desktopOnly: [1, 6, 7],
   },
   {
     key: 'pv', label: '☀️ PV',
     fields: [
       { key: 'zaehler',   label: 'Zähler gesamt (kWh)',   type: 'decimal', req: true  },
       { key: 'pv1',       label: 'PV1 Zähler (optional)', type: 'decimal', req: false },
-      { key: 'bemerkung', label: 'Bemerkung',              type: 'text',    req: false },
+      { key: 'bemerkung', label: 'Bemerkung',              type: 'text',   req: false },
     ],
-    headers: ['Datum', 'Zähler', 'Δ kWh', 'kWh/Tag', 'PV1/2%'],
+    headers:     ['Datum', 'Tage', 'Zähler', 'Δ kWh', 'kWh/Tag', 'Ø kWh/Tag', 'PV1/2%', 'Bemerkung'],
+    desktopOnly: [1, 5, 6, 7],
   },
   {
     key: 'wasser', label: '💧 Wasser',
     fields: [
-      { key: 'zaehler',   label: 'Wasserstand (m³)',       type: 'decimal', req: true  },
-      { key: 'ph',        label: 'pH-Wert',                type: 'decimal', req: false },
-      { key: 'haerte',    label: 'Härte (°dH)',            type: 'decimal', req: false },
-      { key: 'druck',     label: 'Druck (bar)',             type: 'decimal', req: false },
-      { key: 'bemerkung', label: 'Bemerkung',               type: 'text',    req: false },
+      { key: 'zaehler',   label: 'Wasserstand (m³)', type: 'decimal', req: true  },
+      { key: 'ph',        label: 'pH-Wert',           type: 'decimal', req: false },
+      { key: 'haerte',    label: 'Härte (°dH)',       type: 'decimal', req: false },
+      { key: 'druck',     label: 'Druck (bar)',        type: 'decimal', req: false },
+      { key: 'bemerkung', label: 'Bemerkung',          type: 'text',   req: false },
     ],
-    headers: ['Datum', 'm³', 'Δ m³', 'm³/Tag'],
+    headers:     ['Datum', 'Tage', 'm³', 'Δ m³', 'm³/Tag', 'Ø m³/Tag', 'pH', 'Härte', 'Druck', 'Bemerkung'],
+    desktopOnly: [1, 5, 6, 7, 8, 9],
   },
   {
     key: 'heizung', label: '🔥 Heizung',
     fields: [
-      { key: 'zaehler',   label: 'Volllast-Stunden',       type: 'decimal', req: true  },
-      { key: 'druck',     label: 'Druck (bar)',             type: 'decimal', req: false },
-      { key: 'bemerkung', label: 'Bemerkung',               type: 'text',    req: false },
+      { key: 'zaehler',   label: 'Volllast-Stunden', type: 'decimal', req: true  },
+      { key: 'druck',     label: 'Druck (bar)',        type: 'decimal', req: false },
+      { key: 'bemerkung', label: 'Bemerkung',          type: 'text',   req: false },
     ],
-    headers: ['Datum', 'Std.', 'Δ Std.', 'Std/Tag'],
+    headers:     ['Datum', 'Tage', 'Std.', 'Δ Std.', 'Std/Tag', 'Ø Std/Tag', 'Druck', 'Bemerkung'],
+    desktopOnly: [1, 5, 6, 7],
   },
   {
     key: 'wallbox', label: '🔌 Wallbox',
     fields: [
-      { key: 'zaehler',   label: 'Zählerstand (kWh)',      type: 'decimal', req: true  },
-      { key: 'bemerkung', label: 'Bemerkung',               type: 'text',    req: false },
+      { key: 'zaehler',   label: 'Zählerstand (kWh)', type: 'decimal', req: true  },
+      { key: 'bemerkung', label: 'Bemerkung',           type: 'text',   req: false },
     ],
-    headers: ['Datum', 'Zähler', 'Δ kWh', 'kWh/Tag'],
+    headers:     ['Datum', 'Tage', 'Zähler', 'Δ kWh', 'kWh/Tag', 'Ø kWh/Tag', 'Bemerkung'],
+    desktopOnly: [1, 5, 6],
   },
   {
     key: 'maschinen', label: '🔧 Masch.',
     fields: [
-      { key: 'kategorie', label: 'Kategorie',               type: 'text',    req: true  },
-      { key: 'thema',     label: 'Thema',                   type: 'text',    req: false },
-      { key: 'zaehler',   label: 'Betriebsstd.',            type: 'decimal', req: false },
-      { key: 'kosten',    label: 'Kosten [€]',              type: 'decimal', req: false },
+      { key: 'kategorie', label: 'Kategorie',   type: 'text',    req: true  },
+      { key: 'thema',     label: 'Thema',        type: 'text',    req: false },
+      { key: 'zaehler',   label: 'Betriebsstd.', type: 'decimal', req: false },
+      { key: 'kosten',    label: 'Kosten [€]',   type: 'decimal', req: false },
+      { key: 'bemerkung', label: 'Bemerkung',     type: 'text',   req: false },
     ],
-    headers: ['Datum', 'Kategorie', 'Thema', 'Kosten [€]'],
+    headers:     ['Datum', 'Kategorie', 'Thema', 'Betriebsstd.', 'Kosten [€]', 'Bemerkung'],
+    desktopOnly: [3, 5],
   },
 ];
 
@@ -260,6 +267,19 @@ function recalcStromGes(arr, fromIdx) {
 
 // ── Recent rows from JSON ────────────────────────────────────
 
+function calcAvg(entries, cur, key) {
+  const first = entries[0];
+  if (!first || first === cur) return null;
+  const totalDays = dateDiffDays(first.datum, cur.datum);
+  if (totalDays <= 0) return null;
+  if (key === 'strom') {
+    const curG   = cur.zaehler_ges   ?? cur.zaehler;
+    const firstG = first.zaehler_ges ?? first.zaehler;
+    return Math.round((curG - firstG) / totalDays * 10) / 10;
+  }
+  return Math.round((cur.zaehler - first.zaehler) / totalDays * 100) / 100;
+}
+
 function recentRowsJson(entries, key, count) {
   if (!entries || entries.length === 0) return { rows: [], idxs: [], hasMore: false };
 
@@ -271,7 +291,9 @@ function recentRowsJson(entries, key, count) {
         fmtDateStr(e.datum),
         e.kategorie ?? '–',
         e.thema     ?? '–',
-        e.kosten != null ? safeRound(e.kosten, 2) : '–',
+        e.zaehler != null ? safeRound(e.zaehler, 0) : '–',
+        e.kosten   != null ? safeRound(e.kosten,  2) : '–',
+        e.bemerkung ?? '–',
       ]),
       idxs:    slice.map((_, i) => start + i),
       hasMore: start > 0,
@@ -280,32 +302,34 @@ function recentRowsJson(entries, key, count) {
 
   const start = Math.max(0, entries.length - count - 1);
   const slice = entries.slice(start);
-  const dd    = { strom: [0, 0, 1], pv: [0, 0, 1], wasser: [0, 1, 2], heizung: [0, 0, 1], wallbox: [0, 0, 1] }[key] ?? [2, 2, 2];
   const rows  = [], idxs = [];
 
   for (let i = 1; i < slice.length; i++) {
     const cur  = slice[i];
     const prv  = slice[i - 1];
+    const days = dateDiffDays(prv.datum, cur.datum);
+    const avg  = calcAvg(entries, cur, key);
     let delta = null, perDay = null;
 
     if (key === 'strom') {
       const curG = cur.zaehler_ges ?? cur.zaehler;
       const prvG = prv.zaehler_ges ?? prv.zaehler;
       delta = Math.round((curG - prvG) * 1000) / 1000;
-      const days = dateDiffDays(prv.datum, cur.datum);
       if (days > 0) perDay = Math.round(delta / days * 10) / 10;
       rows.push([
         fmtDateStr(cur.datum),
+        days > 0 ? safeRound(days, 0) : '–',
         safeRound(cur.zaehler, 0),
         safeRound(curG, 0),
         safeRound(delta, 0),
         safeRound(perDay, 1),
+        avg != null ? safeRound(avg, 1) : '–',
+        cur.bemerkung ?? '–',
       ]);
 
     } else if (key === 'pv') {
-      const dz   = cur.zaehler - prv.zaehler;
-      delta      = Math.round(dz * 1000) / 1000;
-      const days = dateDiffDays(prv.datum, cur.datum);
+      const dz = cur.zaehler - prv.zaehler;
+      delta = Math.round(dz * 1000) / 1000;
       if (days > 0) perDay = Math.round(dz / days * 10) / 10;
       let ratio = null;
       if (cur.pv1 != null && prv.pv1 != null && delta > 0) {
@@ -314,22 +338,60 @@ function recentRowsJson(entries, key, count) {
       }
       rows.push([
         fmtDateStr(cur.datum),
+        days > 0 ? safeRound(days, 0) : '–',
         safeRound(cur.zaehler, 0),
         safeRound(delta, 0),
         safeRound(perDay, 1),
+        avg != null ? safeRound(avg, 1) : '–',
         ratio ?? '–',
+        cur.bemerkung ?? '–',
+      ]);
+
+    } else if (key === 'wasser') {
+      const dz = parseFloat(cur.zaehler) - parseFloat(prv.zaehler);
+      delta = Math.round(dz * 1000) / 1000;
+      if (days > 0) perDay = Math.round(dz / days * 100) / 100;
+      rows.push([
+        fmtDateStr(cur.datum),
+        days > 0 ? safeRound(days, 0) : '–',
+        safeRound(cur.zaehler, 1),
+        safeRound(delta, 2),
+        safeRound(perDay, 2),
+        avg != null ? safeRound(avg, 3) : '–',
+        cur.ph     != null ? safeRound(cur.ph,     1) : '–',
+        cur.haerte != null ? safeRound(cur.haerte,  0) : '–',
+        cur.druck  != null ? safeRound(cur.druck,   1) : '–',
+        cur.bemerkung ?? '–',
+      ]);
+
+    } else if (key === 'heizung') {
+      const dz = parseFloat(cur.zaehler) - parseFloat(prv.zaehler);
+      delta = Math.round(dz * 1000) / 1000;
+      if (days > 0) perDay = Math.round(dz / days * 10) / 10;
+      rows.push([
+        fmtDateStr(cur.datum),
+        days > 0 ? safeRound(days, 0) : '–',
+        safeRound(cur.zaehler, 0),
+        safeRound(delta, 0),
+        safeRound(perDay, 1),
+        avg != null ? safeRound(avg, 1) : '–',
+        cur.druck != null ? safeRound(cur.druck, 1) : '–',
+        cur.bemerkung ?? '–',
       ]);
 
     } else {
-      const dz   = parseFloat(cur.zaehler) - parseFloat(prv.zaehler);
-      delta      = Math.round(dz * 1000) / 1000;
-      const days = dateDiffDays(prv.datum, cur.datum);
-      if (days > 0) perDay = Math.round(dz / days * 10 ** dd[2]) / 10 ** dd[2];
+      // wallbox + Fallback
+      const dz = parseFloat(cur.zaehler) - parseFloat(prv.zaehler);
+      delta = Math.round(dz * 1000) / 1000;
+      if (days > 0) perDay = Math.round(dz / days * 10) / 10;
       rows.push([
         fmtDateStr(cur.datum),
-        safeRound(cur.zaehler, dd[0]),
-        safeRound(delta, dd[1]),
-        safeRound(perDay, dd[2]),
+        days > 0 ? safeRound(days, 0) : '–',
+        safeRound(cur.zaehler, 0),
+        safeRound(delta, 0),
+        safeRound(perDay, 1),
+        avg != null ? safeRound(avg, 1) : '–',
+        cur.bemerkung ?? '–',
       ]);
     }
 
@@ -420,6 +482,13 @@ function renderForm() {
                  spellcheck="false" oninput="onKatInput(this)">
           <div id="kat-bar" class="suggestion-bar" style="display:none"></div>
         </div>`;
+    } else if (f.key === 'bemerkung') {
+      html += `
+        <div class="field-group">
+          <label>${f.label}</label>
+          <textarea id="f-bemerkung" class="auto-grow" rows="1"
+                    placeholder="optional"></textarea>
+        </div>`;
     } else {
       html += `
         <div class="field-group">
@@ -466,14 +535,20 @@ function pickKat(cat) {
 // ── Render recent table ───────────────────────────────────────
 
 function renderRecentTable(tab, rows, idxs, hasMore) {
-  const hdrs   = tab.headers;
+  const hdrs    = tab.headers;
   const isMasch = tab.key === 'maschinen';
+  const desktop = new Set(tab.desktopOnly ?? []);
+  const lastIdx = hdrs.length - 1;
+
   const colClass = (i) => {
-    if (i === 0) return 'col-date';
-    if (isMasch && i === 1) return 'col-kat';
-    if (isMasch && i === 2) return 'col-thema';
-    if (isMasch && i === 3) return 'col-num col-kosten';
-    return 'col-num';
+    let cls;
+    if (i === 0)                         cls = 'col-date';
+    else if (isMasch && i === 1)         cls = 'col-kat';
+    else if (isMasch && i === 2)         cls = 'col-thema';
+    else if (i === lastIdx)              cls = 'col-rem';
+    else                                 cls = 'col-num';
+    if (desktop.has(i)) cls += ' col-extra';
+    return cls;
   };
 
   let html = '<table class="rt"><thead><tr>';
@@ -548,7 +623,10 @@ async function startEdit(idx) {
 
     for (const f of tab.fields) {
       const el = document.getElementById('f-' + f.key);
-      if (el && entry[f.key] != null) el.value = String(entry[f.key]);
+      if (el && entry[f.key] != null) {
+        el.value = String(entry[f.key]);
+        if (el.tagName === 'TEXTAREA') el.dispatchEvent(new Event('input'));
+      }
     }
 
     updateEditHighlight();
@@ -605,20 +683,19 @@ async function onSubmit() {
     }
   }
 
-  // Strom: compute zaehler_ges based on previous entry
-  if (tab.key === 'strom') {
-    const arr     = _data?.strom || [];
-    const prevIdx = isEdit ? editIdx - 1 : arr.length - 1;
-    const prev    = arr[prevIdx];
-    entry.zaehler_ges = prev
-      ? (prev.zaehler_ges ?? prev.zaehler) + (entry.zaehler - prev.zaehler)
-      : entry.zaehler;
-  }
-
   setStatus('⏳ Speichern…');
   try {
     if (!_data) await loadData();
     const arr = _data[tab.key] || (_data[tab.key] = []);
+
+    // Strom: compute zaehler_ges based on previous entry (must run after loadData)
+    if (tab.key === 'strom') {
+      const prevIdx = isEdit ? editIdx - 1 : arr.length - 1;
+      const prev    = arr[prevIdx];
+      entry.zaehler_ges = prev
+        ? (prev.zaehler_ges ?? prev.zaehler) + (entry.zaehler - prev.zaehler)
+        : entry.zaehler;
+    }
 
     if (isEdit) {
       arr[editIdx] = entry;
@@ -657,6 +734,12 @@ async function init() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
+  document.addEventListener('input', e => {
+    if (e.target.classList.contains('auto-grow')) {
+      e.target.style.height = 'auto';
+      e.target.style.height = e.target.scrollHeight + 'px';
+    }
+  });
   if (location.search.includes('code=')) await handleCallback();
   if (isConnected()) {
     renderApp();
